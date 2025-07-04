@@ -10,11 +10,11 @@ Explore how Thomsen parameters (ε, δ) affect P-wave velocity anisotropy.
 
 # Sidebar sliders for parameters
 st.sidebar.header("Anisotropy Parameters")
-epsilon = st.sidebar.slider("ε (Epsilon)", -0.5, 0.01, 0.0, 0.5, 
+epsilon = st.sidebar.slider("ε (Epsilon)", -0.5, 0.01, 0.01, 0.5, 
                            help="Controls the 'stretch' of the velocity ellipse")
-delta = st.sidebar.slider("δ (Delta)", -0.5, 0.01, 0.0, 0.5, 
+delta = st.sidebar.slider("δ (Delta)", -0.5, 0.01, 0.01, 0.5, 
                          help="Affects curvature near the axes")
-gamma = st.sidebar.slider("γ (Gamma)", -0.5, 0.01, 0.0, 0.5, 
+gamma = st.sidebar.slider("γ (Gamma)", -0.5, 0.01, 0.01, 0.5, 
                          help="Shear-wave anisotropy (unused in this model)")
 
 # Main calculation and plotting function
