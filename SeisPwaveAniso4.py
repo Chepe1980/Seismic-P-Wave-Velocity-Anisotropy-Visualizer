@@ -181,7 +181,7 @@ def avaz_section():
                     xaxis_title='Azimuth (degrees)',
                     yaxis_title='Incidence Angle (degrees)',
                     zaxis_title='Reflectivity',
-                    camera=dict(eye=dict(x=3.5, y=3.5, z=1.3))
+                    camera=dict(eye=dict(x=0.2, y=0.3, z=0.6))
             ))
 
             # Display results
