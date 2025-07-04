@@ -182,7 +182,7 @@ def avaz_section():
                     yaxis_title='Incidence Angle (degrees)',
                     zaxis_title='Reflectivity',
                     camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
-            )
+            ))
 
             # Display results
             st.pyplot(fig1)
