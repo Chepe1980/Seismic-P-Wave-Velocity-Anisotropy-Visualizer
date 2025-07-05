@@ -7,13 +7,29 @@ import streamlit as st
 from scipy.signal import convolve
 
 # ==============================================
-# App Configuration
+# Core Functions (Defined first)
 # ==============================================
-st.set_page_config(layout="wide")
-st.title("Seismic Anisotropy Analysis Toolkit")
+def ricker_wavelet(freq, length, dt):
+    t = np.arange(-length/2, length/2, dt)
+    return (1 - 2*(np.pi*freq*t)**2) * np.exp(-(np.pi*freq*t)**2)
+
+def calculate_reflectivity(vp, vs, d, e, g, dlt, theta, azimuth):
+    """Calculate reflectivity for a single angle and azimuth"""
+    VP2 = (vp[1] + vp[2])/2
+    VS2 = (vs[1] + vs[2])/2
+    DEN2 = (d[1] + d[2])/2
+
+    A2 = -0.5 * ((vp[2]-vp[1])/VP2 + (d[2]-d[1])/DEN2)
+    
+    az_rad = np.radians(azimuth)
+    Biso2 = 0.5*((vp[2]-vp[1])/VP2) - 2*(VS2/VP2)**2*(d[2]-d[1])/DEN2 - 4*(VS2/VP2)**2*(vs[2]-vs[1])/VS2
+    Baniso2 = 0.5*((dlt[2]-dlt[1]) + 2*(2*VS2/VP2)**2*(g[2]-g[1]))
+    Caniso2 = 0.5*((vp[2]-vp[1])/VP2 - (e[2]-e[1])*np.cos(az_rad)**4 + (dlt[2]-dlt[1])*np.sin(az_rad)**2*np.cos(az_rad)**2)
+    
+    return A2 + (Biso2 + Baniso2*np.cos(az_rad)**2)*np.sin(theta)**2 + Caniso2*np.sin(theta)**2*np.tan(theta)**2
 
 # ==============================================
-# P-Wave Anisotropy Visualizer (Independent)
+# P-Wave Anisotropy Visualizer
 # ==============================================
 def pwave_anisotropy_section():
     st.header("P-Wave Velocity Anisotropy Visualizer")
@@ -60,18 +76,15 @@ def pwave_anisotropy_section():
         fig, ax = plt.subplots(figsize=(8, 8))
         
         if show_all_angles:
-            # Plot velocity for all azimuths (0-360°)
             azimuths = np.linspace(0, 2*np.pi, 36)
             for az in azimuths:
                 Vpx_az = Vp * np.sin(theta) * np.cos(az)
                 Vpy_az = Vp * np.sin(theta) * np.sin(az)
                 ax.plot(Vpx_az, Vpy_az, 'b-', alpha=0.3, linewidth=0.5)
             
-            # Highlight principal axes
             ax.plot(Vpx, np.zeros_like(Vpx), 'r-', label='X-axis (0° azimuth)')
             ax.plot(np.zeros_like(Vpy), Vpy, 'g-', label='Y-axis (90° azimuth)')
         else:
-            # Just show the principal direction
             ax.plot(Vpx, Vpy, 'b-', linewidth=2, label=f"ε={epsilon:.3f}, δ={delta:.3f}")
 
         ax.set_xlabel('Vpx [m/s]', fontsize=12)
@@ -85,17 +98,15 @@ def pwave_anisotropy_section():
         st.pyplot(fig)
 
 # ==============================================
-# AVAz Modeling (Enhanced with Full Angle-Azimuth Matrix)
+# AVAz Modeling Section
 # ==============================================
 def avaz_section():
     st.header("AVAz Modeling Tool")
     st.markdown("Visualize Amplitude Variation with Azimuth responses for anisotropic media.")
 
-    # Sidebar inputs
     with st.sidebar:
         st.subheader("Rock Properties")
         
-        # Layer parameters
         layers = ["Upper (1)", "Target (2)", "Lower (3)"]
         params = {}
         
@@ -109,7 +120,6 @@ def avaz_section():
             params[f'dlt{i}'] = st.number_input(f"δ{i}", value=0.0 if i==1 else (-0.13 if i==2 else 0.1), step=0.01, key=f"dlt{i}_avaz")
             st.markdown("---")
 
-        # Acquisition parameters
         st.subheader("Acquisition")
         params['max_angle'] = st.number_input("Maximum Angle (deg)", 1, 90, 60, key="max_angle_avaz")
         params['angle_step'] = st.number_input("Angle Step (deg)", 1, 10, 2, key="angle_step_avaz")
@@ -118,7 +128,6 @@ def avaz_section():
 
     if st.sidebar.button("Run Full AVAz Modeling"):
         with st.spinner("Computing full angle-azimuth response..."):
-            # Prepare parameters
             vp = [params['vp1'], params['vp2'], params['vp3']]
             vs = [params['vs1'], params['vs2'], params['vs3']]
             d = [params['d1'], params['d2'], params['d3']]
@@ -126,18 +135,14 @@ def avaz_section():
             g = [params['g1'], params['g2'], params['g3']]
             dlt = [params['dlt1'], params['dlt2'], params['dlt3']]
             
-            # Create angle and azimuth ranges
             incidence_angles = np.arange(0, params['max_angle']+1, params['angle_step'])
             azimuths = np.arange(0, 361, params['azimuth_step'])
             
-            # Calculate critical angle
             vp1, vp2 = vp[0], vp[1]
             critical_angle = np.degrees(np.arcsin(vp1/vp2)) if vp1 < vp2 else 90
             st.info(f"Critical angle: {critical_angle:.1f}° (computed from Vp1/Vp2 ratio)")
 
-            # ==============================================
-            # 1. Full Angle-Azimuth Reflectivity Matrix
-            # ==============================================
+            # Compute reflectivity matrix
             reflectivity_matrix = np.zeros((len(incidence_angles), len(azimuths)))
             
             for i, theta_deg in enumerate(incidence_angles):
@@ -147,14 +152,13 @@ def avaz_section():
                         vp, vs, d, e, g, dlt, theta_rad, az
                     )
 
-            # Plot reflectivity matrix (All angles and azimuths in one image)
+            # Plot 1: Full AVAz matrix
             fig1, ax1 = plt.subplots(figsize=(12, 6))
             im = ax1.imshow(reflectivity_matrix.T, aspect='auto', 
                           extent=[0, params['max_angle'], 0, 360],
                           cmap='jet', vmin=-0.4, vmax=0.2,
                           origin='lower')
             
-            # Add critical angle line
             if vp1 < vp2:
                 ax1.axvline(x=critical_angle, color='white', linestyle='--', 
                            label=f'Critical Angle ({critical_angle:.1f}°)')
@@ -165,30 +169,23 @@ def avaz_section():
             ax1.legend()
             st.pyplot(fig1)
 
-            # ==============================================
-            # 2. Synthetic Gathers for Each Angle
-            # ==============================================
+            # Plot 2: Angle gathers
             st.subheader("Angle Gathers")
-            
-            # Create time axis
             n_samples = 150
             wavelet = ricker_wavelet(params['freq'], 0.08, 0.001)
             center_sample = n_samples//2 + len(wavelet)//2
             
-            # Create figure with subplots for each angle
             n_cols = 3
             n_rows = int(np.ceil(len(incidence_angles)/n_cols))
             fig2, axs = plt.subplots(n_rows, n_cols, figsize=(18, 3*n_rows))
             axs = axs.flatten() if n_rows > 1 else [axs]
             
             for idx, theta_deg in enumerate(incidence_angles):
-                # Create synthetic traces
                 R = np.zeros((n_samples, len(azimuths)))
                 R[n_samples//2, :] = reflectivity_matrix[idx, :]
                 syn = np.array([convolve(R[:,az], wavelet, mode='full') for az in range(len(azimuths))]).T
                 syn = syn[center_sample-75:center_sample+75, :]
                 
-                # Plot gather
                 vmax = np.abs(syn).max()
                 axs[idx].imshow(syn, cmap='seismic', aspect='auto',
                                vmin=-vmax, vmax=vmax,
@@ -200,9 +197,7 @@ def avaz_section():
             plt.tight_layout()
             st.pyplot(fig2)
 
-            # ==============================================
-            # 3. 3D Surface Plot (Interactive)
-            # ==============================================
+            # Plot 3: 3D surface
             st.subheader("3D AVAz Response")
             fig3d = go.Figure(data=[go.Surface(
                 z=reflectivity_matrix,
@@ -226,6 +221,7 @@ def avaz_section():
 # ==============================================
 # App Navigation
 # ==============================================
+st.sidebar.header("Navigation")
 tool = st.sidebar.radio(
     "Select Tool",
     ["P-Wave Anisotropy", "AVAz Modeling"],
