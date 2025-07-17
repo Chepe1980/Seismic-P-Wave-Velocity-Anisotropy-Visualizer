@@ -59,7 +59,69 @@ def velocity_to_moduli(Vp, Vs, density):
 # ==============================================
 def pwave_anisotropy_section():
     st.header("P-Wave Velocity Anisotropy Visualizer")
-    # ... (keep existing pwave_anisotropy_section code unchanged)
+    st.markdown("Explore how Thomsen parameters (ε, δ) affect P-wave velocity anisotropy.")
+
+    col1, col2 = st.columns([1, 3])
+    
+    with col1:
+        st.subheader("Parameters")
+        epsilon = st.number_input(
+            "ε (Epsilon)", 
+            min_value=-0.5, 
+            max_value=0.5, 
+            value=-0.01, 
+            step=0.01,
+            key="epsilon_pwave"
+        )
+        delta = st.number_input(
+            "δ (Delta)", 
+            min_value=-0.5, 
+            max_value=0.5, 
+            value=-0.01, 
+            step=0.01,
+            key="delta_pwave"
+        )
+        vp0 = st.number_input(
+            "Vp₀ (m/s)", 
+            min_value=1000, 
+            max_value=8000, 
+            value=3000,
+            key="vp0_pwave"
+        )
+        st.markdown("---")
+        show_all_angles = st.checkbox("Show all incidence angles", value=False, key="show_all_pwave")
+
+    with col2:
+        theta = np.linspace(0, 90, 90) * np.pi / 180
+        Vp = vp0 * (1 + delta * (np.sin(theta))**2 * (np.cos(theta))**2 
+                     + epsilon * (np.sin(theta))**4)
+        
+        Vpx = Vp * np.sin(theta)
+        Vpy = Vp * np.cos(theta)
+        
+        fig, ax = plt.subplots(figsize=(8, 8))
+        
+        if show_all_angles:
+            azimuths = np.linspace(0, 2*np.pi, 36)
+            for az in azimuths:
+                Vpx_az = Vp * np.sin(theta) * np.cos(az)
+                Vpy_az = Vp * np.sin(theta) * np.sin(az)
+                ax.plot(Vpx_az, Vpy_az, 'b-', alpha=0.3, linewidth=0.5)
+            
+            ax.plot(Vpx, np.zeros_like(Vpx), 'r-', label='X-axis (0° azimuth)')
+            ax.plot(np.zeros_like(Vpy), Vpy, 'g-', label='Y-axis (90° azimuth)')
+        else:
+            ax.plot(Vpx, Vpy, 'b-', linewidth=2, label=f"ε={epsilon:.3f}, δ={delta:.3f}")
+
+        ax.set_xlabel('Vpx [m/s]', fontsize=12)
+        ax.set_ylabel('Vpy [m/s]', fontsize=12)
+        ax.set_title("P-Wave Velocity Anisotropy", fontsize=14)
+        ax.axis('square')
+        ax.set_xlim(-1.5*vp0, 1.5*vp0)
+        ax.set_ylim(-1.5*vp0, 1.5*vp0)
+        ax.grid(True, linestyle='--', alpha=0.7)
+        ax.legend()
+        st.pyplot(fig)
 
 # ==============================================
 # AVAz Modeling Section with Fluid Substitution Comparison
@@ -169,63 +231,54 @@ def avaz_section():
             zmin = min(np.min(reflectivity_orig), np.min(reflectivity_sub))
             zmax = max(np.max(reflectivity_orig), np.max(reflectivity_sub))
             
-            fig = make_subplots(
-                rows=1, cols=2,
-                specs=[[{'type': 'surface'}, {'type': 'surface'}]],
-                subplot_titles=("Original Response", "Fluid-Substituted Response"),
-                horizontal_spacing=0.1
-            )
+            # Create separate figures instead of subplots to avoid the error
+            col1, col2 = st.columns(2)
             
-            # Original response
-            fig.add_trace(
-                go.Surface(
+            with col1:
+                fig_orig = go.Figure(data=[go.Surface(
                     z=reflectivity_orig,
                     x=azimuths,
                     y=incidence_angles,
                     colorscale='Jet',
                     cmin=zmin,
                     cmax=zmax,
-                    colorbar=dict(x=0.45, title='Reflectivity'),
-                    name="Original"
-                ),
-                row=1, col=1
-            )
+                    colorbar=dict(title='Reflectivity')
+                )])
+                fig_orig.update_layout(
+                    scene=dict(
+                        xaxis_title='Azimuth (deg)',
+                        yaxis_title='Incidence Angle (deg)',
+                        zaxis_title='Reflectivity',
+                        camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+                    ),
+                    title="Original Response",
+                    height=600,
+                    width=600
+                )
+                st.plotly_chart(fig_orig, use_container_width=True)
             
-            # Fluid-substituted response
-            fig.add_trace(
-                go.Surface(
+            with col2:
+                fig_sub = go.Figure(data=[go.Surface(
                     z=reflectivity_sub,
                     x=azimuths,
                     y=incidence_angles,
                     colorscale='Jet',
                     cmin=zmin,
                     cmax=zmax,
-                    colorbar=dict(x=1.0, title='Reflectivity'),
-                    name="Substituted"
-                ),
-                row=1, col=2
-            )
-            
-            # Update layout
-            fig.update_layout(
-                scene1=dict(
-                    xaxis_title='Azimuth (deg)',
-                    yaxis_title='Incidence Angle (deg)',
-                    zaxis_title='Reflectivity',
-                    camera=dict(eye=dict(x=1.5, y=1.5, z=0.8)),
-                scene2=dict(
-                    xaxis_title='Azimuth (deg)',
-                    yaxis_title='Incidence Angle (deg)',
-                    zaxis_title='Reflectivity',
-                    camera=dict(eye=dict(x=1.5, y=1.5, z=0.8)),
-                ),
-                height=600,
-                width=1200,
-                margin=dict(l=50, r=50, b=50, t=50),
-                title_text="AVAz Response Comparison: Original vs Fluid-Substituted"
-            ))
-            
-            st.plotly_chart(fig, use_container_width=True)
+                    colorbar=dict(title='Reflectivity')
+                )])
+                fig_sub.update_layout(
+                    scene=dict(
+                        xaxis_title='Azimuth (deg)',
+                        yaxis_title='Incidence Angle (deg)',
+                        zaxis_title='Reflectivity',
+                        camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+                    ),
+                    title="Fluid-Substituted Response",
+                    height=600,
+                    width=600
+                )
+                st.plotly_chart(fig_sub, use_container_width=True)
             
             # Show difference plot
             st.subheader("Difference Between Responses")
@@ -251,7 +304,6 @@ def avaz_section():
                     camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
                 ),
                 height=600,
-                width=800,
                 title_text="Fluid-Substituted minus Original Response"
             )
             
@@ -269,5 +321,5 @@ tool = st.sidebar.radio(
 
 if tool == "P-Wave Anisotropy":
     pwave_anisotropy_section()
-else:
+elif tool == "AVAz Modeling":
     avaz_section()
