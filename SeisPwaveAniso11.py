@@ -223,7 +223,7 @@ def avaz_section():
                 width=1200,
                 margin=dict(l=50, r=50, b=50, t=50),
                 title_text="AVAz Response Comparison: Original vs Fluid-Substituted"
-            )
+            ))
             
             st.plotly_chart(fig, use_container_width=True)
             
