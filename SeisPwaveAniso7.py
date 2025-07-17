@@ -1,13 +1,13 @@
+
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import cm
 import plotly.graph_objects as go
 import streamlit as st
 from scipy.signal import convolve
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.models import ColumnDataSource, LinearColorMapper
 from bokeh.palettes import Viridis256
-from bokeh.transform import linear_cmap
+from bokeh.transform import transform
 
 # ==============================================
 # Core Functions
@@ -47,26 +47,23 @@ def pwave_anisotropy_section():
             min_value=-0.5, 
             max_value=0.5, 
             value=-0.01, 
-            step=0.01,
-            key="epsilon_pwave"
+            step=0.01
         )
         delta = st.number_input(
             "δ (Delta)", 
             min_value=-0.5, 
             max_value=0.5, 
             value=-0.01, 
-            step=0.01,
-            key="delta_pwave"
+            step=0.01
         )
         vp0 = st.number_input(
             "Vp₀ (m/s)", 
             min_value=1000, 
             max_value=8000, 
-            value=3000,
-            key="vp0_pwave"
+            value=3000
         )
         st.markdown("---")
-        show_all_angles = st.checkbox("Show all incidence angles", value=False, key="show_all_pwave")
+        show_all_angles = st.checkbox("Show all incidence angles", value=False)
 
     with col2:
         theta = np.linspace(0, 90, 90) * np.pi / 180
@@ -90,9 +87,9 @@ def pwave_anisotropy_section():
         else:
             ax.plot(Vpx, Vpy, 'b-', linewidth=2, label=f"ε={epsilon:.3f}, δ={delta:.3f}")
 
-        ax.set_xlabel('Vpx [m/s]', fontsize=12)
-        ax.set_ylabel('Vpy [m/s]', fontsize=12)
-        ax.set_title("P-Wave Velocity Anisotropy", fontsize=14)
+        ax.set_xlabel('Vpx [m/s]')
+        ax.set_ylabel('Vpy [m/s]')
+        ax.set_title("P-Wave Velocity Anisotropy")
         ax.axis('square')
         ax.set_xlim(-1.5*vp0, 1.5*vp0)
         ax.set_ylim(-1.5*vp0, 1.5*vp0)
@@ -115,19 +112,19 @@ def avaz_section():
         
         for i, layer in enumerate(layers, 1):
             st.markdown(f"**Layer {layer}**")
-            params[f'vp{i}'] = st.number_input(f"Vp{i} (m/s)", value=5500 if i!=2 else 4742, key=f"vp{i}_avaz")
-            params[f'vs{i}'] = st.number_input(f"Vs{i} (m/s)", value=3600 if i!=2 else 3292, key=f"vs{i}_avaz")
-            params[f'd{i}'] = st.number_input(f"Density{i} (g/cc)", value=2.6 if i!=2 else 2.4, step=0.1, key=f"d{i}_avaz")
-            params[f'e{i}'] = st.number_input(f"ε{i}", value=0.1 if i==1 else (-0.01 if i==2 else 0.2), step=0.01, key=f"e{i}_avaz")
-            params[f'g{i}'] = st.number_input(f"γ{i}", value=0.05 if i==1 else (-0.05 if i==2 else 0.15), step=0.01, key=f"g{i}_avaz")
-            params[f'dlt{i}'] = st.number_input(f"δ{i}", value=0.0 if i==1 else (-0.13 if i==2 else 0.1), step=0.01, key=f"dlt{i}_avaz")
+            params[f'vp{i}'] = st.number_input(f"Vp{i} (m/s)", value=5500 if i!=2 else 4742)
+            params[f'vs{i}'] = st.number_input(f"Vs{i} (m/s)", value=3600 if i!=2 else 3292)
+            params[f'd{i}'] = st.number_input(f"Density{i} (g/cc)", value=2.6 if i!=2 else 2.4, step=0.1)
+            params[f'e{i}'] = st.number_input(f"ε{i}", value=0.1 if i==1 else (-0.01 if i==2 else 0.2), step=0.01)
+            params[f'g{i}'] = st.number_input(f"γ{i}", value=0.05 if i==1 else (-0.05 if i==2 else 0.15), step=0.01)
+            params[f'dlt{i}'] = st.number_input(f"δ{i}", value=0.0 if i==1 else (-0.13 if i==2 else 0.1), step=0.01)
             st.markdown("---")
 
         st.subheader("Acquisition")
-        params['max_angle'] = st.number_input("Maximum Angle (deg)", 1, 90, 60, key="max_angle_avaz")
-        params['angle_step'] = st.number_input("Angle Step (deg)", 1, 10, 2, key="angle_step_avaz")
-        params['freq'] = st.number_input("Wavelet Frequency (Hz)", 10, 100, 45, key="freq_avaz")
-        params['azimuth_step'] = st.number_input("Azimuth Step (deg)", 1, 30, 10, key="azimuth_step_avaz")
+        params['max_angle'] = st.number_input("Maximum Angle (deg)", 1, 90, 60)
+        params['angle_step'] = st.number_input("Angle Step (deg)", 1, 10, 2)
+        params['freq'] = st.number_input("Wavelet Frequency (Hz)", 10, 100, 45)
+        params['azimuth_step'] = st.number_input("Azimuth Step (deg)", 1, 30, 10)
 
     if st.sidebar.button("Run Full AVAz Modeling"):
         with st.spinner("Computing full angle-azimuth response..."):
@@ -172,68 +169,33 @@ def avaz_section():
             ax1.legend()
             st.pyplot(fig1)
 
-            # Plot 2: Angle gathers (Bokeh)
-            st.subheader("Interactive Angle Gathers")
+            # Plot 2: Angle gathers (Matplotlib version - fallback)
+            st.subheader("Angle Gathers")
             n_samples = 150
             wavelet = ricker_wavelet(params['freq'], 0.08, 0.001)
             center_sample = n_samples//2 + len(wavelet)//2
             
-            for theta_deg in incidence_angles:
-                st.markdown(f"**{theta_deg}° Incidence Angle**")
+            n_cols = 3
+            n_rows = int(np.ceil(len(incidence_angles)/n_cols))
+            fig2, axs = plt.subplots(n_rows, n_cols, figsize=(18, 3*n_rows))
+            axs = axs.flatten() if n_rows > 1 else [axs]
+            
+            for idx, theta_deg in enumerate(incidence_angles):
                 R = np.zeros((n_samples, len(azimuths)))
-                R[n_samples//2, :] = reflectivity_matrix[incidence_angles.tolist().index(theta_deg), :]
+                R[n_samples//2, :] = reflectivity_matrix[idx, :]
                 syn = np.array([convolve(R[:,az], wavelet, mode='full') for az in range(len(azimuths))]).T
                 syn = syn[center_sample-75:center_sample+75, :]
                 
-                # Prepare data for Bokeh
-                x = np.arange(0, 360, 360/syn.shape[1])
-                y = np.arange(syn.shape[0])
-                xx, yy = np.meshgrid(x, y)
-                
-                source = ColumnDataSource(data=dict(
-                    x=xx.ravel(),
-                    y=yy.ravel(),
-                    amplitude=syn.ravel()
-                ))
-                
-                # Create color mapper
-                mapper = linear_cmap(
-                    field_name='amplitude', 
-                    palette=Viridis256, 
-                    low=syn.min(), 
-                    high=syn.max()
-                )
-                
-                p = figure(
-                    width=800, 
-                    height=400,
-                    tools="pan,wheel_zoom,box_zoom,reset,save",
-                    x_range=[0, 360],
-                    y_range=[syn.shape[0], 0],
-                    x_axis_label="Azimuth (degrees)",
-                    y_axis_label="Time samples"
-                )
-                
-                p.rect(
-                    x="x", 
-                    y="y", 
-                    width=360/syn.shape[1], 
-                    height=1,
-                    source=source,
-                    fill_color=mapper,
-                    line_color=None
-                )
-                
-                hover = HoverTool(
-                    tooltips=[
-                        ("Azimuth", "@x{0.0}°"),
-                        ("Time", "@y{0}"),
-                        ("Amplitude", "@amplitude{0.4f}")
-                    ]
-                )
-                p.add_tools(hover)
-                
-                st.bokeh_chart(p, use_container_width=True)
+                vmax = np.abs(syn).max()
+                axs[idx].imshow(syn, cmap='seismic', aspect='auto',
+                               vmin=-vmax, vmax=vmax,
+                               extent=[0, 360, syn.shape[0], 0])
+                axs[idx].set(title=f'{theta_deg}° Incidence',
+                            xlabel='Azimuth' if idx >= (n_rows-1)*n_cols else '',
+                            ylabel='Time' if idx % n_cols == 0 else '')
+            
+            plt.tight_layout()
+            st.pyplot(fig2)
 
             # Plot 3: 3D surface
             st.subheader("3D AVAz Response")
