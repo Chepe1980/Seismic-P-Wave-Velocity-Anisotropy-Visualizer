@@ -3,7 +3,7 @@ numpy
 matplotlib
 plotly
 scipy
-
+bokeh
 
 
 
