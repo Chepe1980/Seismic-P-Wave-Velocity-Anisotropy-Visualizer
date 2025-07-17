@@ -1,17 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from matplotlib.colors import Normalize
 import plotly.graph_objects as go
 import streamlit as st
 from scipy.signal import convolve
 from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource, HoverTool
-from bokeh.palettes import Viridis
-from bokeh.layouts import gridplot
+from bokeh.palettes import Viridis256
+from bokeh.transform import linear_cmap
 
 # ==============================================
-# Core Functions (Defined first)
+# Core Functions
 # ==============================================
 def ricker_wavelet(freq, length, dt):
     t = np.arange(-length/2, length/2, dt)
@@ -102,7 +101,7 @@ def pwave_anisotropy_section():
         st.pyplot(fig)
 
 # ==============================================
-# AVAz Modeling Section (Updated with Bokeh)
+# AVAz Modeling Section
 # ==============================================
 def avaz_section():
     st.header("AVAz Modeling Tool")
@@ -156,7 +155,7 @@ def avaz_section():
                         vp, vs, d, e, g, dlt, theta_rad, az
                     )
 
-            # Plot 1: Full AVAz matrix (Matplotlib)
+            # Plot 1: Full AVAz matrix
             fig1, ax1 = plt.subplots(figsize=(12, 6))
             im = ax1.imshow(reflectivity_matrix.T, aspect='auto', 
                           extent=[0, params['max_angle'], 0, 360],
@@ -174,60 +173,69 @@ def avaz_section():
             st.pyplot(fig1)
 
             # Plot 2: Angle gathers (Bokeh)
-            st.subheader("Interactive Angle Gathers (Bokeh)")
+            st.subheader("Interactive Angle Gathers")
             n_samples = 150
             wavelet = ricker_wavelet(params['freq'], 0.08, 0.001)
             center_sample = n_samples//2 + len(wavelet)//2
             
-            plots = []
-            for idx, theta_deg in enumerate(incidence_angles):
+            for theta_deg in incidence_angles:
+                st.markdown(f"**{theta_deg}° Incidence Angle**")
                 R = np.zeros((n_samples, len(azimuths)))
-                R[n_samples//2, :] = reflectivity_matrix[idx, :]
+                R[n_samples//2, :] = reflectivity_matrix[incidence_angles.tolist().index(theta_deg), :]
                 syn = np.array([convolve(R[:,az], wavelet, mode='full') for az in range(len(azimuths))]).T
                 syn = syn[center_sample-75:center_sample+75, :]
                 
-                # Create Bokeh figure
+                # Prepare data for Bokeh
+                x = np.arange(0, 360, 360/syn.shape[1])
+                y = np.arange(syn.shape[0])
+                xx, yy = np.meshgrid(x, y)
+                
+                source = ColumnDataSource(data=dict(
+                    x=xx.ravel(),
+                    y=yy.ravel(),
+                    amplitude=syn.ravel()
+                ))
+                
+                # Create color mapper
+                mapper = linear_cmap(
+                    field_name='amplitude', 
+                    palette=Viridis256, 
+                    low=syn.min(), 
+                    high=syn.max()
+                )
+                
                 p = figure(
-                    width=400, 
-                    height=300,
-                    title=f"{theta_deg}° Incidence",
+                    width=800, 
+                    height=400,
                     tools="pan,wheel_zoom,box_zoom,reset,save",
                     x_range=[0, 360],
                     y_range=[syn.shape[0], 0],
-                    x_axis_label="Azimuth" if idx >= (len(incidence_angles)-3) else "",
-                    y_axis_label="Time" if idx % 3 == 0 else ""
+                    x_axis_label="Azimuth (degrees)",
+                    y_axis_label="Time samples"
                 )
                 
-                # Add image
-                source = ColumnDataSource(data=dict(image=[syn]))
-                p.image(
-                    image='image', 
-                    x=0, 
-                    y=0, 
-                    dw=360, 
-                    dh=syn.shape[0],
+                p.rect(
+                    x="x", 
+                    y="y", 
+                    width=360/syn.shape[1], 
+                    height=1,
                     source=source,
-                    palette="Viridis256",
-                    level="image"
+                    fill_color=mapper,
+                    line_color=None
                 )
                 
-                # Add hover
                 hover = HoverTool(
                     tooltips=[
                         ("Azimuth", "@x{0.0}°"),
-                        ("Time", "@y{0.0}"),
-                        ("Amplitude", "@image{0.2f}")
-                    ],
-                    mode="mouse"
+                        ("Time", "@y{0}"),
+                        ("Amplitude", "@amplitude{0.4f}")
+                    ]
                 )
                 p.add_tools(hover)
-                plots.append(p)
-            
-            # Arrange in grid
-            grid = gridplot(plots, ncols=3, toolbar_location="right")
-            st.bokeh_chart(grid)
+                
+                st.bokeh_chart(p, use_container_width=True)
 
-            # Plot 3: 3D surface (Plotly)
+            # Plot 3: 3D surface
             st.subheader("3D AVAz Response")
             fig3d = go.Figure(data=[go.Surface(
                 z=reflectivity_matrix,
