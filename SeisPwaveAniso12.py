@@ -120,7 +120,9 @@ def pwave_anisotropy_section():
         ax.set_ylim(-1.5*vp0, 1.5*vp0)
         ax.grid(True, linestyle='--', alpha=0.7)
         ax.legend()
-        st.pyplot(fig)
+        
+        # Use st.pyplot() with clear_figure=True to prevent memory leaks
+        st.pyplot(fig, clear_figure=True)
 
 # ==============================================
 # AVAz Modeling Section with Fluid Substitution Comparison
@@ -238,7 +240,7 @@ def avaz_section():
             zmin = min(np.min(reflectivity_orig), np.min(reflectivity_sub))
             zmax = max(np.max(reflectivity_orig), np.max(reflectivity_sub))
             
-            # Create separate figures instead of subplots to avoid the error
+            # Create separate figures instead of subplots
             col1, col2 = st.columns(2)
             
             with col1:
@@ -248,8 +250,7 @@ def avaz_section():
                     y=incidence_angles,
                     colorscale='Jet',
                     cmin=zmin,
-                    cmax=zmax,
-                    colorbar=dict(title='Reflectivity')
+                    cmax=zmax
                 )])
                 fig_orig.update_layout(
                     scene=dict(
@@ -260,7 +261,7 @@ def avaz_section():
                     ),
                     title="Original Response",
                     height=500,
-                    width=500
+                    margin=dict(l=50, r=50, b=50, t=50)
                 )
                 st.plotly_chart(fig_orig, use_container_width=True)
             
@@ -271,8 +272,7 @@ def avaz_section():
                     y=incidence_angles,
                     colorscale='Jet',
                     cmin=zmin,
-                    cmax=zmax,
-                    colorbar=dict(title='Reflectivity')
+                    cmax=zmax
                 )])
                 fig_sub.update_layout(
                     scene=dict(
@@ -283,7 +283,7 @@ def avaz_section():
                     ),
                     title="Fluid-Substituted Response",
                     height=500,
-                    width=500
+                    margin=dict(l=50, r=50, b=50, t=50)
                 )
                 st.plotly_chart(fig_sub, use_container_width=True)
             
@@ -315,9 +315,9 @@ def avaz_section():
             
             col1, col2 = st.columns(2)
             with col1:
-                st.pyplot(fig)
+                st.pyplot(fig, clear_figure=True)
             with col2:
-                st.pyplot(fig_polar)
+                st.pyplot(fig_polar, clear_figure=True)
             
             # Show difference plot
             st.subheader("Difference Between Responses")
@@ -331,8 +331,7 @@ def avaz_section():
                 y=incidence_angles,
                 colorscale='RdBu',
                 cmin=-max_diff,
-                cmax=max_diff,
-                colorbar=dict(title='Reflectivity Difference')
+                cmax=max_diff
             )])
             fig_diff.update_layout(
                 scene=dict(
@@ -342,6 +341,7 @@ def avaz_section():
                     camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
                 ),
                 height=600,
+                margin=dict(l=50, r=50, b=50, t=50),
                 title_text="Fluid-Substituted minus Original Response"
             )
             st.plotly_chart(fig_diff, use_container_width=True)
@@ -349,14 +349,22 @@ def avaz_section():
 # ==============================================
 # App Navigation
 # ==============================================
-st.sidebar.header("Navigation")
-tool = st.sidebar.radio(
-    "Select Tool",
-    ["P-Wave Anisotropy", "AVAz Modeling"],
-    index=0
-)
+def main():
+    st.sidebar.header("Navigation")
+    tool = st.sidebar.radio(
+        "Select Tool",
+        ["P-Wave Anisotropy", "AVAz Modeling"],
+        index=0
+    )
 
-if tool == "P-Wave Anisotropy":
-    pwave_anisotropy_section()
-elif tool == "AVAz Modeling":
-    avaz_section()
+    if tool == "P-Wave Anisotropy":
+        pwave_anisotropy_section()
+    elif tool == "AVAz Modeling":
+        avaz_section()
+
+if __name__ == "__main__":
+    # Clear caches and set configuration to prevent JS errors
+    st.set_page_config(layout="wide")
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    main()
