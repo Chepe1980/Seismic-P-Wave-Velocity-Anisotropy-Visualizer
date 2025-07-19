@@ -53,27 +53,27 @@ def velocity_to_moduli(Vp, Vs, density):
     K = density * Vp**2 - (4/3)*G
     return K, G
 
-def create_3d_plot(x, y, z, values, title, colorscale='Viridis'):
-    """Create interactive 3D surface plot"""
+def create_3d_plot(x, y, z, vp):
+    """Create interactive 3D velocity surface plot"""
     fig = go.Figure(data=[
         go.Surface(
             x=x, y=y, z=z,
-            surfacecolor=values,
-            colorscale=colorscale,
-            colorbar=dict(title='Reflectivity'),
+            surfacecolor=vp,
+            colorscale='Viridis',
+            colorbar=dict(title='Velocity (m/s)'),
             opacity=0.9,
             hoverinfo='x+y+z+text',
-            text=[f'R: {val:.4f}' for val in values.flatten()]
+            text=[f'Vp: {val:.0f} m/s' for val in vp.flatten()]
         )
     ])
     
     fig.update_layout(
-        title=title,
+        title='3D Velocity Surface (Drag to rotate)',
         scene=dict(
-            xaxis_title='Azimuth (deg)',
-            yaxis_title='Angle (deg)',
-            zaxis_title='Reflectivity',
-            aspectratio=dict(x=1, y=1, z=0.7),
+            xaxis_title='X [m/s]',
+            yaxis_title='Y [m/s]',
+            zaxis_title='Z [m/s]',
+            aspectratio=dict(x=1, y=1, z=1),
             camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
         ),
         margin=dict(l=0, r=0, b=0, t=40),
@@ -81,18 +81,39 @@ def create_3d_plot(x, y, z, values, title, colorscale='Viridis'):
     )
     return fig
 
-def pwave_anisotropy_section(epsilon, delta, vp0, title_suffix=""):
+def pwave_anisotropy_section(epsilon, delta, vp0):
     """Visualize P-wave velocity anisotropy based on Thomsen parameters"""
-    st.header(f"P-Wave Velocity Anisotropy {title_suffix}")
-    
+    st.header("P-Wave Velocity Anisotropy Visualizer")
+    st.markdown("Explore how Thomsen parameters (ε, δ) affect P-wave velocity anisotropy.")
+
     col1, col2 = st.columns([1, 3])
     
     with col1:
         st.subheader("Parameters")
-        st.write(f"ε (Epsilon): {epsilon:.3f}")
-        st.write(f"δ (Delta): {delta:.3f}")
-        st.write(f"Vp₀: {vp0:.0f} m/s")
-        show_3d = st.checkbox(f"Show 3D Visualization {title_suffix}", True, key=f"show3d_{title_suffix}")
+        epsilon = st.number_input(
+            "ε (Epsilon)", 
+            min_value=-0.5, 
+            max_value=0.5, 
+            value=epsilon, 
+            step=0.01,
+            key="epsilon_ani"
+        )
+        delta = st.number_input(
+            "δ (Delta)", 
+            min_value=-0.5, 
+            max_value=0.5, 
+            value=delta, 
+            step=0.01,
+            key="delta_ani"
+        )
+        vp0 = st.number_input(
+            "Vp₀ (m/s)", 
+            min_value=1000, 
+            max_value=8000, 
+            value=vp0,
+            key="vp0_ani"
+        )
+        show_3d = st.checkbox("Show 3D Visualization", True, key="show3d_ani")
 
     with col2:
         # Calculate Vp for 2D plot
@@ -108,7 +129,7 @@ def pwave_anisotropy_section(epsilon, delta, vp0, title_suffix=""):
         ax.plot(Vpx, Vpy, 'b-', linewidth=2, label=f"ε={epsilon:.3f}, δ={delta:.3f}")
         ax.set_xlabel('Vpx [m/s]', fontsize=12)
         ax.set_ylabel('Vpy [m/s]', fontsize=12)
-        ax.set_title(f"P-Wave Velocity Anisotropy {title_suffix}", fontsize=14)
+        ax.set_title("P-Wave Velocity Anisotropy", fontsize=14)
         ax.axis('square')
         ax.set_xlim(0, 1.5*vp0)
         ax.set_ylim(0, 1.5*vp0)
@@ -118,7 +139,7 @@ def pwave_anisotropy_section(epsilon, delta, vp0, title_suffix=""):
         
         # 3D plot if enabled
         if show_3d:
-            st.subheader(f"3D Velocity Surface {title_suffix}")
+            st.subheader("3D Velocity Surface")
             # Calculate full 3D velocity field
             theta_3d = np.linspace(0, np.pi, 90)
             phi_3d = np.linspace(0, 2*np.pi, 90)
@@ -132,16 +153,7 @@ def pwave_anisotropy_section(epsilon, delta, vp0, title_suffix=""):
             y = Vp_3d * np.sin(theta_grid) * np.sin(phi_grid)
             z = Vp_3d * np.cos(theta_grid)
             
-            fig_3d = go.Figure(data=[
-                go.Surface(
-                    x=x, y=y, z=z,
-                    surfacecolor=Vp_3d,
-                    colorscale='Viridis',
-                    colorbar=dict(title='Velocity (m/s)'),
-                    opacity=0.9
-                )
-            ])
-            fig_3d.update_layout(title=f'3D Velocity {title_suffix}', height=700)
+            fig_3d = create_3d_plot(x, y, z, Vp_3d)
             st.plotly_chart(fig_3d, use_container_width=True)
 
 def process_excel_data(uploaded_file, depth_ranges):
@@ -200,7 +212,7 @@ def plot_depth_ranges(depth_ranges, min_depth, max_depth):
     
     st.pyplot(fig)
 
-def run_modeling(params, enable_fluid_sub, selected_angle, azimuth_step, freq):
+def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth_step, freq):
     """Run the modeling for ONLY the selected angle (with all azimuths)"""
     with st.spinner("Computing models..."):
         # Original properties
@@ -275,25 +287,6 @@ def run_modeling(params, enable_fluid_sub, selected_angle, azimuth_step, freq):
         seismic_sub = np.array([convolve(R[:,az], wavelet, mode='full') for az in range(len(azimuths))]).T
         seismic_sub = seismic_sub[center_sample-75:center_sample+75, :]
         
-        # Prepare 3D reflectivity data (for visualization)
-        theta_3d = np.radians(np.linspace(0, selected_angle, 30))
-        az_3d = np.radians(azimuths)
-        theta_grid, az_grid = np.meshgrid(theta_3d, az_3d)
-        
-        # Calculate 3D reflectivity surfaces
-        r_3d_orig = np.zeros_like(theta_grid)
-        r_3d_sub = np.zeros_like(theta_grid)
-        for i in range(theta_grid.shape[0]):
-            for j in range(theta_grid.shape[1]):
-                r_3d_orig[i,j] = calculate_reflectivity(
-                    vp_orig, vs_orig, d_orig, e_orig, g_orig, dlt_orig, 
-                    theta_grid[i,j], np.degrees(az_grid[i,j])
-                )
-                r_3d_sub[i,j] = calculate_reflectivity(
-                    vp_sub, vs_sub, d_sub, e_sub, g_sub, dlt_sub,
-                    theta_grid[i,j], np.degrees(az_grid[i,j])
-                )
-        
         return {
             'reflectivity_orig': reflectivity_orig,
             'reflectivity_sub': reflectivity_sub,
@@ -312,20 +305,119 @@ def run_modeling(params, enable_fluid_sub, selected_angle, azimuth_step, freq):
             'g_orig': g_orig,
             'g_sub': g_sub,
             'dlt_orig': dlt_orig,
-            'dlt_sub': dlt_sub,
-            'r_3d_orig': r_3d_orig,
-            'r_3d_sub': r_3d_sub,
-            'theta_grid': theta_grid,
-            'az_grid': az_grid
+            'dlt_sub': dlt_sub
         }
 
-def display_results(results, selected_angle):
-    """Display modeling results for single angle"""
-    tab1, tab2, tab3 = st.tabs([
-        "2D Comparisons", 
-        "3D Reflectivity", 
-        "Anisotropy Analysis"
+def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
+    """Run full AVAZ modeling for ALL angles and azimuths (for 3D plot)"""
+    with st.spinner("Computing 3D AVAZ response..."):
+        # Original properties
+        vp_orig = [params['vp1'], params['vp2'], params['vp3']]
+        vs_orig = [params['vs1'], params['vs2'], params['vs3']]
+        d_orig = [params['d1'], params['d2'], params['d3']]
+        e_orig = [params['e1'], params['e2'], params['e3']]
+        g_orig = [params['g1'], params['g2'], params['g3']]
+        dlt_orig = [params['dlt1'], params['dlt2'], params['dlt3']]
+        
+        # Fluid substituted properties (initialize as original)
+        vp_sub = vp_orig.copy()
+        vs_sub = vs_orig.copy()
+        d_sub = d_orig.copy()
+        e_sub = e_orig.copy()
+        g_sub = g_orig.copy()
+        dlt_sub = dlt_orig.copy()
+        
+        if enable_fluid_sub:
+            # Calculate original moduli for target layer
+            K_orig, G_orig = velocity_to_moduli(params['vp2'], params['vs2'], params['d2'])
+            
+            # Perform fluid substitution
+            K_sat, G_sat, delta_sat, gamma_sat = brown_korringa_substitution(
+                params['Km']*1e9, params['Gm']*1e9, 
+                K_orig, G_orig,
+                params['Kf']*1e9, 
+                params['phi'], 
+                params['dlt2'], params['g2']
+            )
+            
+            # Convert back to velocities
+            new_density = params['d2'] + params['phi']*(params['new_fluid_density'] - 1.0)
+            Vp_new, Vs_new = moduli_to_velocity(K_sat, G_sat, new_density)
+            
+            # Update target layer properties
+            vp_sub[1] = Vp_new
+            vs_sub[1] = Vs_new
+            d_sub[1] = new_density
+            dlt_sub[1] = delta_sat
+            g_sub[1] = gamma_sat
+        
+        # Compute for ALL angles (0-90°) and azimuths (0-360°)
+        incidence_angles = np.arange(0, 91, 5)  # 5° steps
+        azimuths = np.arange(0, 361, azimuth_step)
+        
+        # Compute reflectivity (2D array: angles × azimuths)
+        reflectivity_orig = np.zeros((len(incidence_angles), len(azimuths)))
+        reflectivity_sub = np.zeros((len(incidence_angles), len(azimuths)))
+        
+        for i, theta in enumerate(incidence_angles):
+            theta_rad = np.radians(theta)
+            for j, az in enumerate(azimuths):
+                reflectivity_orig[i,j] = calculate_reflectivity(
+                    vp_orig, vs_orig, d_orig, e_orig, g_orig, dlt_orig, theta_rad, az
+                )
+                reflectivity_sub[i,j] = calculate_reflectivity(
+                    vp_sub, vs_sub, d_sub, e_sub, g_sub, dlt_sub, theta_rad, az
+                )
+        
+        return {
+            'reflectivity_orig': reflectivity_orig,
+            'reflectivity_sub': reflectivity_sub,
+            'incidence_angles': incidence_angles,
+            'azimuths': azimuths
+        }
+
+def plot_3d_avaz_response(results, title):
+    """Create 3D surface plot of AVAZ response"""
+    theta_grid, phi_grid = np.meshgrid(
+        np.radians(results['incidence_angles']),
+        np.radians(results['azimuths'])
+    )
+    
+    fig = go.Figure(data=[
+        go.Surface(
+            x=theta_grid,
+            y=phi_grid,
+            z=results['reflectivity_orig'].T,
+            colorscale='Viridis',
+            opacity=0.9,
+            name='Original'
+        ),
+        go.Surface(
+            x=theta_grid,
+            y=phi_grid,
+            z=results['reflectivity_sub'].T,
+            colorscale='Plasma',
+            opacity=0.7,
+            name='Fluid-Substituted'
+        )
     ])
+    
+    fig.update_layout(
+        title=title,
+        scene=dict(
+            xaxis_title='Incidence Angle (θ)',
+            yaxis_title='Azimuth (φ)',
+            zaxis_title='Reflectivity',
+            camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+        ),
+        margin=dict(l=0, r=0, b=0, t=40),
+        height=700
+    )
+    return fig
+
+def display_results(results, seismic_cmap, selected_angle):
+    """Display modeling results for single angle"""
+    tab1, tab2, tab3 = st.tabs(["2D Comparisons", "Seismic Gather", "3D AVAZ Response"])
     
     with tab1:
         st.header(f"AVAZ Response at {selected_angle}°")
@@ -361,16 +453,16 @@ def display_results(results, selected_angle):
         ax.grid(True)
         ax.legend()
         st.pyplot(fig2)
-        
-        # Seismic comparison
-        st.subheader(f"Synthetic Seismic at {selected_angle}°")
+    
+    with tab2:
+        st.header(f"Synthetic Seismic at {selected_angle}°")
         
         fig3, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
         
         # Original seismic
-        vmax = max(np.abs(results['seismic_orig']).max(), np.abs(results['seismic_sub']).max())
+        vmax = np.abs(results['seismic_orig']).max()
         ax1.imshow(results['seismic_orig'], 
-                 cmap='seismic', 
+                 cmap=seismic_cmap, 
                  aspect='auto',
                  vmin=-vmax, 
                  vmax=vmax,
@@ -378,8 +470,9 @@ def display_results(results, selected_angle):
         ax1.set(title=f'Original at {selected_angle}°', xlabel='Azimuth', ylabel='Time')
         
         # Substituted seismic
+        vmax = np.abs(results['seismic_sub']).max()
         ax2.imshow(results['seismic_sub'], 
-                 cmap='seismic', 
+                 cmap=seismic_cmap, 
                  aspect='auto',
                  vmin=-vmax, 
                  vmax=vmax,
@@ -388,92 +481,25 @@ def display_results(results, selected_angle):
         
         st.pyplot(fig3)
     
-    with tab2:
-        st.header("3D Reflectivity Comparison")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            # Original 3D reflectivity
-            fig_orig = create_3d_plot(
-                np.degrees(results['az_grid']),
-                np.degrees(results['theta_grid']),
-                results['r_3d_orig'],
-                "Original Reflectivity",
-                colorscale='Jet'
-            )
-            st.plotly_chart(fig_orig, use_container_width=True)
-        
-        with col2:
-            # Substituted 3D reflectivity
-            fig_sub = create_3d_plot(
-                np.degrees(results['az_grid']),
-                np.degrees(results['theta_grid']),
-                results['r_3d_sub'],
-                "Fluid-Substituted Reflectivity",
-                colorscale='Jet'
-            )
-            st.plotly_chart(fig_sub, use_container_width=True)
-        
-        # Difference 3D plot
-        st.subheader("3D Reflectivity Difference")
-        diff_3d = results['r_3d_sub'] - results['r_3d_orig']
-        fig_diff = create_3d_plot(
-            np.degrees(results['az_grid']),
-            np.degrees(results['theta_grid']),
-            diff_3d,
-            "Reflectivity Difference (Fluid Sub - Original)",
-            colorscale='RdBu'
-        )
-        st.plotly_chart(fig_diff, use_container_width=True)
-    
     with tab3:
-        st.header("Anisotropy Parameter Comparison")
+        st.header("3D AVAZ Response Comparison")
+        st.markdown("""
+            **Interactive 3D view of reflectivity across all angles (0-90°) and azimuths (0-360°).**  
+            - **Original (Blue)**: Reflectivity before fluid substitution.  
+            - **Fluid-Substituted (Red)**: Reflectivity after substitution.  
+            - **Rotate** the plot to see azimuthal variations.
+        """)
         
-        # Show P-wave anisotropy for both models
-        col1, col2 = st.columns(2)
-        with col1:
-            pwave_anisotropy_section(
-                results['e_orig'][1],
-                results['dlt_orig'][1],
-                results['vp_orig'][1],
-                "(Original)"
-            )
+        # Run full AVAZ modeling (all angles)
+        full_results = run_full_avaz_modeling(
+            st.session_state.model_params,
+            st.session_state.enable_fluid_sub,
+            st.session_state.freq,
+            st.session_state.azimuth_step
+        )
         
-        with col2:
-            pwave_anisotropy_section(
-                results['e_sub'][1],
-                results['dlt_sub'][1],
-                results['vp_sub'][1],
-                "(Fluid-Substituted)"
-            )
-        
-        # Parameter comparison table
-        st.subheader("Parameter Changes in Target Layer")
-        params_df = pd.DataFrame({
-            'Parameter': ['Vp (m/s)', 'Vs (m/s)', 'Density (g/cc)', 'Epsilon', 'Delta', 'Gamma'],
-            'Original': [
-                results['vp_orig'][1], results['vs_orig'][1], results['d_orig'][1],
-                results['e_orig'][1], results['dlt_orig'][1], results['g_orig'][1]
-            ],
-            'Fluid-Substituted': [
-                results['vp_sub'][1], results['vs_sub'][1], results['d_sub'][1],
-                results['e_sub'][1], results['dlt_sub'][1], results['g_sub'][1]
-            ],
-            'Change (%)': [
-                100*(results['vp_sub'][1]-results['vp_orig'][1])/results['vp_orig'][1],
-                100*(results['vs_sub'][1]-results['vs_orig'][1])/results['vs_orig'][1],
-                100*(results['d_sub'][1]-results['d_orig'][1])/results['d_orig'][1],
-                100*(results['e_sub'][1]-results['e_orig'][1])/results['e_orig'][1],
-                100*(results['dlt_sub'][1]-results['dlt_orig'][1])/results['dlt_orig'][1],
-                100*(results['g_sub'][1]-results['g_orig'][1])/results['g_orig'][1]
-            ]
-        })
-        
-        st.dataframe(params_df.style.format({
-            'Original': '{:.2f}',
-            'Fluid-Substituted': '{:.2f}',
-            'Change (%)': '{:.2f}%'
-        }))
+        fig_3d = plot_3d_avaz_response(full_results, "3D AVAZ Response Comparison")
+        st.plotly_chart(fig_3d, use_container_width=True)
 
 def main():
     st.set_page_config(layout="wide", page_title="AVAZ Modeling with Fluid Substitution")
@@ -533,25 +559,47 @@ def main():
                 params['Kf'] = st.number_input("Fluid Bulk Modulus (GPa)", 0.1, 5.0, 2.2, 0.1)
                 params['new_fluid_density'] = st.number_input("New Fluid Density (g/cc)", 0.1, 1.5, 1.0, 0.1)
             
+            # Add colormap selection
+            st.subheader("Visualization Options")
+            seismic_cmap = st.selectbox(
+                "Seismic Colormap",
+                options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma'],
+                index=0
+            )
+            
+            # Add button to show P-wave anisotropy section
+            show_anisotropy = st.checkbox("Show P-Wave Anisotropy Section", False)
+            
             if st.button("Run Modeling"):
                 st.session_state.show_results = True
                 st.session_state.model_params = params
                 st.session_state.enable_fluid_sub = enable_fluid_sub
+                st.session_state.seismic_cmap = seismic_cmap
                 st.session_state.selected_angle = selected_angle
                 st.session_state.azimuth_step = azimuth_step
                 st.session_state.freq = freq
+                st.session_state.show_anisotropy = show_anisotropy
         
         # Main workspace content
         if st.session_state.show_results:
+            if st.session_state.show_anisotropy:
+                pwave_anisotropy_section(
+                    st.session_state.model_params['e2'],
+                    st.session_state.model_params['dlt2'],
+                    st.session_state.model_params['vp2']
+                )
+            
             results = run_modeling(
                 st.session_state.model_params,
                 st.session_state.enable_fluid_sub,
+                st.session_state.seismic_cmap,
                 st.session_state.selected_angle,
                 st.session_state.azimuth_step,
                 st.session_state.freq
             )
             display_results(
                 results,
+                st.session_state.seismic_cmap,
                 st.session_state.selected_angle
             )
     
@@ -634,13 +682,25 @@ def main():
                         Kf = st.number_input("Fluid Bulk Modulus (GPa)", 0.1, 5.0, 2.2, 0.1, key="excel_Kf")
                         new_fluid_density = st.number_input("New Fluid Density (g/cc)", 0.1, 1.5, 1.0, 0.1, key="excel_fluid_density")
                     
+                    st.subheader("Visualization Options")
+                    seismic_cmap = st.selectbox(
+                        "Seismic Colormap",
+                        options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma'],
+                        index=0, 
+                        key="excel_seismic_cmap"
+                    )
+                    
+                    show_anisotropy = st.checkbox("Show P-Wave Anisotropy Section", False, key="excel_show_anisotropy")
+                    
                     if st.button("Run Modeling with Excel Data"):
                         st.session_state.excel_data_processed = True
                         st.session_state.uploaded_file = uploaded_file
                         st.session_state.enable_fluid_sub = enable_fluid_sub
+                        st.session_state.seismic_cmap = seismic_cmap
                         st.session_state.selected_angle = selected_angle
                         st.session_state.azimuth_step = azimuth_step
                         st.session_state.freq = freq
+                        st.session_state.show_anisotropy = show_anisotropy
                         
                         if enable_fluid_sub:
                             st.session_state.phi = phi
@@ -680,16 +740,21 @@ def main():
                                 'new_fluid_density': st.session_state.new_fluid_density
                             })
                         
+                        if st.session_state.show_anisotropy:
+                            pwave_anisotropy_section(params['e2'], params['dlt2'], params['vp2'])
+                        
                         # Run modeling
                         results = run_modeling(
                             params,
                             st.session_state.enable_fluid_sub,
+                            st.session_state.seismic_cmap,
                             st.session_state.selected_angle,
                             st.session_state.azimuth_step,
                             st.session_state.freq
                         )
                         display_results(
                             results,
+                            st.session_state.seismic_cmap,
                             st.session_state.selected_angle
                         )
                 
