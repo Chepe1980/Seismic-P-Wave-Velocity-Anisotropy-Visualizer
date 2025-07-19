@@ -260,8 +260,8 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
         azimuths = np.arange(0, 361, azimuth_step)
         
         # Compute reflectivity (2D array: angles × azimuths)
-        reflectivity_orig = np.zeros((len(incidence_angles), len(azimuths)))
-        reflectivity_sub = np.zeros((len(incidence_angles), len(azimuths)))
+        incidence_angles = np.linspace(0, 50, 11)  # 11 steps from 0-50°
+        azimuths = np.arange(0, 361, azimuth_step)
         
         for i, theta in enumerate(incidence_angles):
             theta_rad = np.radians(theta)
@@ -316,10 +316,10 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
 def display_results(results, seismic_cmap, selected_angle):
     """Display modeling results with new 3D AVAZ comparison"""
     # Find nearest angle index instead of exact match
-    angle_idx = np.argmin(np.abs(results['incidence_angles'] - selected_angle))
+    angle_idx = np.argmin(np.abs(results['incidence_angles'] - min(selected_angle, 50)))
     actual_angle = results['incidence_angles'][angle_idx]
     
-    st.header("3D AVAZ Response Comparison")
+    st.header("3D AVAZ Response Comparison (0-50° Incidence)")
     col1, col2 = st.columns(2)
     
     # Get min/max for consistent color scaling
