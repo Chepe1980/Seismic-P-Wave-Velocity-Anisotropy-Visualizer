@@ -309,7 +309,7 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
         }
 
 def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
-    """Run full AVAZ modeling for angles (0-70°) and azimuths (0-360°) (for 3D plot)"""
+    """Run full AVAZ modeling for angles (0-70°) and azimuths (0-360°)"""
     with st.spinner("Computing 3D AVAZ response..."):
         # Original properties
         vp_orig = [params['vp1'], params['vp2'], params['vp3']]
@@ -319,7 +319,7 @@ def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
         g_orig = [params['g1'], params['g2'], params['g3']]
         dlt_orig = [params['dlt1'], params['dlt2'], params['dlt3']]
         
-        # Fluid substituted properties (initialize as original)
+        # Fluid substituted properties
         vp_sub = vp_orig.copy()
         vs_sub = vs_orig.copy()
         d_sub = d_orig.copy()
@@ -328,10 +328,7 @@ def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
         dlt_sub = dlt_orig.copy()
         
         if enable_fluid_sub:
-            # Calculate original moduli for target layer
             K_orig, G_orig = velocity_to_moduli(params['vp2'], params['vs2'], params['d2'])
-            
-            # Perform fluid substitution
             K_sat, G_sat, delta_sat, gamma_sat = brown_korringa_substitution(
                 params['Km']*1e9, params['Gm']*1e9, 
                 K_orig, G_orig,
@@ -339,23 +336,19 @@ def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
                 params['phi'], 
                 params['dlt2'], params['g2']
             )
-            
-            # Convert back to velocities
             new_density = params['d2'] + params['phi']*(params['new_fluid_density'] - 1.0)
             Vp_new, Vs_new = moduli_to_velocity(K_sat, G_sat, new_density)
             
-            # Update target layer properties
             vp_sub[1] = Vp_new
             vs_sub[1] = Vs_new
             d_sub[1] = new_density
             dlt_sub[1] = delta_sat
             g_sub[1] = gamma_sat
         
-        # Compute for angles (0-70°) and azimuths (0-360°)
-        incidence_angles = np.arange(0, 71, 5)  # 5° steps up to 70°
+        # Compute for all angles and azimuths
+        incidence_angles = np.linspace(0, 70, 15)  # 0-70° in 15 steps
         azimuths = np.arange(0, 361, azimuth_step)
         
-        # Compute reflectivity (2D array: angles × azimuths)
         reflectivity_orig = np.zeros((len(incidence_angles), len(azimuths)))
         reflectivity_sub = np.zeros((len(incidence_angles), len(azimuths)))
         
@@ -377,30 +370,37 @@ def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
         }
 
 def plot_3d_avaz_response(results, title):
-    """Create 3D surface plot of AVAZ response with corrected axis limits"""
-    theta_grid, phi_grid = np.meshgrid(
-        np.radians(results['incidence_angles']),
-        np.radians(results['azimuths'])
-    )
+    """Create corrected 3D AVAZ response plot"""
+    # Convert angles to radians for plotting
+    theta = np.radians(results['incidence_angles'])
+    phi = np.radians(results['azimuths'])
     
-    fig = go.Figure(data=[
-        go.Surface(
-            x=theta_grid,
-            y=phi_grid,
-            z=results['reflectivity_orig'].T,
-            colorscale='Viridis',
-            opacity=0.9,
-            name='Original'
-        ),
-        go.Surface(
-            x=theta_grid,
-            y=phi_grid,
-            z=results['reflectivity_sub'].T,
-            colorscale='Plasma',
-            opacity=0.7,
-            name='Fluid-Substituted'
-        )
-    ])
+    # Create meshgrid
+    theta_grid, phi_grid = np.meshgrid(theta, phi)
+    
+    fig = go.Figure()
+    
+    # Original response
+    fig.add_trace(go.Surface(
+        x=theta_grid,
+        y=phi_grid,
+        z=results['reflectivity_orig'].T,
+        colorscale='Viridis',
+        opacity=0.9,
+        name='Original',
+        showscale=True
+    ))
+    
+    # Fluid-substituted response
+    fig.add_trace(go.Surface(
+        x=theta_grid,
+        y=phi_grid,
+        z=results['reflectivity_sub'].T,
+        colorscale='Plasma',
+        opacity=0.7,
+        name='Fluid-Substituted',
+        showscale=True
+    ))
     
     fig.update_layout(
         title=title,
@@ -408,13 +408,27 @@ def plot_3d_avaz_response(results, title):
             xaxis_title='Incidence Angle (θ)',
             yaxis_title='Azimuth (φ)',
             zaxis_title='Reflectivity',
-            xaxis=dict(range=[0, np.radians(70)]),  # Limit θ to 0-70°
-            yaxis=dict(range=[0, np.radians(360)]), # Limit φ to 0-360°
-            camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+            xaxis=dict(
+                tickvals=np.radians([0, 15, 30, 45, 60, 70]),
+                ticktext=['0°', '15°', '30°', '45°', '60°', '70°'],
+                range=[0, np.radians(70)]
+            ),
+            yaxis=dict(
+                tickvals=np.radians([0, 90, 180, 270, 360]),
+                ticktext=['0°', '90°', '180°', '270°', '360°'],
+                range=[0, np.radians(360)]
+            ),
+            zaxis=dict(
+                title='Reflectivity'
+            ),
+            camera=dict(
+                eye=dict(x=1.5, y=1.5, z=0.8)
+            )
         ),
         margin=dict(l=0, r=0, b=0, t=40),
         height=700
     )
+    
     return fig
 
 def display_results(results, seismic_cmap, selected_angle):
