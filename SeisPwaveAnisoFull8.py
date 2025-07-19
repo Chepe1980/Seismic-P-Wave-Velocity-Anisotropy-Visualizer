@@ -213,7 +213,7 @@ def plot_depth_ranges(depth_ranges, min_depth, max_depth):
     st.pyplot(fig)
 
 def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth_step, freq):
-    """Run the modeling for ALL angles (0-70°) and azimuths (0-360°)"""
+    """Run the modeling for ALL angles (0-50°) and azimuths (0-360°)"""
     with st.spinner("Computing models..."):
         # Original properties
         vp_orig = [params['vp1'], params['vp2'], params['vp3']]
@@ -223,7 +223,7 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
         g_orig = [params['g1'], params['g2'], params['g3']]
         dlt_orig = [params['dlt1'], params['dlt2'], params['dlt3']]
         
-        # Fluid substituted properties (initialize as original)
+        # Fluid substituted properties
         vp_sub = vp_orig.copy()
         vs_sub = vs_orig.copy()
         d_sub = d_orig.copy()
@@ -232,10 +232,7 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
         dlt_sub = dlt_orig.copy()
         
         if enable_fluid_sub:
-            # Calculate original moduli for target layer
             K_orig, G_orig = velocity_to_moduli(params['vp2'], params['vs2'], params['d2'])
-            
-            # Perform fluid substitution
             K_sat, G_sat, delta_sat, gamma_sat = brown_korringa_substitution(
                 params['Km']*1e9, params['Gm']*1e9, 
                 K_orig, G_orig,
@@ -243,25 +240,22 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
                 params['phi'], 
                 params['dlt2'], params['g2']
             )
-            
-            # Convert back to velocities
             new_density = params['d2'] + params['phi']*(params['new_fluid_density'] - 1.0)
             Vp_new, Vs_new = moduli_to_velocity(K_sat, G_sat, new_density)
             
-            # Update target layer properties
             vp_sub[1] = Vp_new
             vs_sub[1] = Vs_new
             d_sub[1] = new_density
             dlt_sub[1] = delta_sat
             g_sub[1] = gamma_sat
         
-        # Compute for ALL angles (0-70°) and azimuths (0-360°)
-        incidence_angles = np.linspace(0, 70, 15)  # 15 steps from 0-70°
+        # Compute for ALL angles (0-50°) and azimuths (0-360°)
+        incidence_angles = np.linspace(0, 50, 11)  # 11 steps from 0-50°
         azimuths = np.arange(0, 361, azimuth_step)
         
         # Compute reflectivity (2D array: angles × azimuths)
-        incidence_angles = np.linspace(0, 50, 11)  # 11 steps from 0-50°
-        azimuths = np.arange(0, 361, azimuth_step)
+        reflectivity_orig = np.zeros((len(incidence_angles), len(azimuths)))
+        reflectivity_sub = np.zeros((len(incidence_angles), len(azimuths)))
         
         for i, theta in enumerate(incidence_angles):
             theta_rad = np.radians(theta)
@@ -314,8 +308,8 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
         }
 
 def display_results(results, seismic_cmap, selected_angle):
-    """Display modeling results with new 3D AVAZ comparison"""
-    # Find nearest angle index instead of exact match
+    """Display modeling results with 0-50° 3D AVAZ comparison"""
+    # Find nearest angle index within 0-50° range
     angle_idx = np.argmin(np.abs(results['incidence_angles'] - min(selected_angle, 50)))
     actual_angle = results['incidence_angles'][angle_idx]
     
@@ -342,7 +336,7 @@ def display_results(results, seismic_cmap, selected_angle):
                 zaxis_title='Reflectivity',
                 camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
             ),
-            title="Original Response",
+            title="Original Response (0-50°)",
             height=500
         )
         st.plotly_chart(fig_orig, use_container_width=True)
@@ -363,10 +357,13 @@ def display_results(results, seismic_cmap, selected_angle):
                 zaxis_title='Reflectivity',
                 camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
             ),
-            title="Fluid-Substituted Response",
+            title="Fluid-Substituted Response (0-50°)",
             height=500
         )
         st.plotly_chart(fig_sub, use_container_width=True)
+    
+    # [Rest of your display_results function remains unchanged]
+    # ...
     
     # 2. 2D Comparison at nearest angle
     st.header(f"2D Comparison at {actual_angle:.1f}° Incidence (Closest to Selected {selected_angle}°)")
