@@ -377,7 +377,7 @@ def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
         }
 
 def plot_3d_avaz_response(results, title):
-    """Create 3D surface plot of AVAZ response"""
+    """Create 3D surface plot of AVAZ response with corrected axis limits"""
     theta_grid, phi_grid = np.meshgrid(
         np.radians(results['incidence_angles']),
         np.radians(results['azimuths'])
@@ -408,6 +408,8 @@ def plot_3d_avaz_response(results, title):
             xaxis_title='Incidence Angle (θ)',
             yaxis_title='Azimuth (φ)',
             zaxis_title='Reflectivity',
+            xaxis=dict(range=[0, np.radians(70)]),  # Limit θ to 0-70°
+            yaxis=dict(range=[0, np.radians(360)]), # Limit φ to 0-360°
             camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
         ),
         margin=dict(l=0, r=0, b=0, t=40),
