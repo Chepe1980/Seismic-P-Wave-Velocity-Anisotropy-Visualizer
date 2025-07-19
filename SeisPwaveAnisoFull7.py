@@ -309,7 +309,7 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
         }
 
 def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
-    """Run full AVAZ modeling for ALL angles and azimuths (for 3D plot)"""
+    """Run full AVAZ modeling for angles (0-70°) and azimuths (0-360°) (for 3D plot)"""
     with st.spinner("Computing 3D AVAZ response..."):
         # Original properties
         vp_orig = [params['vp1'], params['vp2'], params['vp3']]
@@ -351,8 +351,8 @@ def run_full_avaz_modeling(params, enable_fluid_sub, freq, azimuth_step):
             dlt_sub[1] = delta_sat
             g_sub[1] = gamma_sat
         
-        # Compute for ALL angles (0-90°) and azimuths (0-360°)
-        incidence_angles = np.arange(0, 91, 5)  # 5° steps
+        # Compute for angles (0-70°) and azimuths (0-360°)
+        incidence_angles = np.arange(0, 71, 5)  # 5° steps up to 70°
         azimuths = np.arange(0, 361, azimuth_step)
         
         # Compute reflectivity (2D array: angles × azimuths)
