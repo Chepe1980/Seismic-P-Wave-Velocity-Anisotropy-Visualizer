@@ -315,6 +315,10 @@ def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth
 
 def display_results(results, seismic_cmap, selected_angle):
     """Display modeling results with new 3D AVAZ comparison"""
+    # Find nearest angle index instead of exact match
+    angle_idx = np.argmin(np.abs(results['incidence_angles'] - selected_angle))
+    actual_angle = results['incidence_angles'][angle_idx]
+    
     st.header("3D AVAZ Response Comparison")
     col1, col2 = st.columns(2)
     
@@ -364,31 +368,32 @@ def display_results(results, seismic_cmap, selected_angle):
         )
         st.plotly_chart(fig_sub, use_container_width=True)
     
-    # 2. 2D Comparison at selected angle
-    st.header(f"2D Comparison at {selected_angle}° Incidence")
-    
-    angle_idx = np.where(results['incidence_angles'] == selected_angle)[0][0]
+    # 2. 2D Comparison at nearest angle
+    st.header(f"2D Comparison at {actual_angle:.1f}° Incidence (Closest to Selected {selected_angle}°)")
     
     fig1, ax1 = plt.subplots(figsize=(10, 6))
     ax1.plot(results['azimuths'], results['reflectivity_orig'][angle_idx, :], 'b-', label='Original')
     ax1.plot(results['azimuths'], results['reflectivity_sub'][angle_idx, :], 'r--', label='Fluid-Substituted')
     ax1.set_xlabel('Azimuth (degrees)')
     ax1.set_ylabel('Reflectivity')
-    ax1.set_title(f'AVAZ Reflectivity at {selected_angle}° Incidence')
+    ax1.set_title(f'AVAZ Reflectivity at {actual_angle:.1f}° Incidence')
     ax1.grid(True)
     ax1.legend()
     st.pyplot(fig1)
     
     # 3. Polar View Comparison
-    st.header(f"Polar View Comparison at {selected_angle}° Incidence")
+    st.header(f"Polar View Comparison at {actual_angle:.1f}° Incidence")
     
     fig2, ax2 = plt.subplots(figsize=(8, 8), subplot_kw={'projection': 'polar'})
     theta_rad = np.radians(results['azimuths'])
     ax2.plot(theta_rad, results['reflectivity_orig'][angle_idx, :], 'b-', label='Original')
     ax2.plot(theta_rad, results['reflectivity_sub'][angle_idx, :], 'r--', label='Fluid-Substituted')
-    ax2.set_title(f'Polar AVAZ Response at {selected_angle}° Incidence', pad=20)
+    ax2.set_title(f'Polar AVAZ Response at {actual_angle:.1f}° Incidence', pad=20)
     ax2.legend()
     st.pyplot(fig2)
+    
+    # Rest of the function remains the same...
+    # [Keep all other visualization code unchanged]
     
     # 4. Seismic Gathers Comparison
     st.header("Synthetic Seismic Gathers Comparison")
