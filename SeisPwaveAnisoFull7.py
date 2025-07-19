@@ -431,6 +431,7 @@ def plot_3d_avaz_response(results, title):
     
     return fig
 
+
 def display_results(results, seismic_cmap, selected_angle):
     """Display modeling results for single angle"""
     tab1, tab2, tab3 = st.tabs(["2D Comparisons", "Seismic Gather", "3D AVAZ Response"])
