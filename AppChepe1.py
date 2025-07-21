@@ -10,25 +10,6 @@ from datetime import datetime, timedelta
 import hashlib
 
 
-# .streamlit/secrets.toml
-[credentials]
-email = "dali80_chepe@hotmail.com"  # Replace with your admin email
-password = "$2b$12$XpX7pZR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR"  # Replace with your hashed password
-
-[cookie]
-key = "$2b$12$XpX7pZR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR"
-name = "auth_cookie"
-expiry_days = 30
-
- #Generate a hashed password
-password = "HelloWorld2025!!!!!"  # Change this to your real password
-hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-print(f"Hashed password: {hashed_password}")
-
-
-
-
-
 
 # ==============================================
 # Authentication Functions
