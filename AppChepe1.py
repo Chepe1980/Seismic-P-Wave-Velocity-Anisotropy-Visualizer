@@ -16,38 +16,48 @@ import hashlib
 # ==============================================
 # In AppChepe1.py
 def initialize_authenticator():
+    """Initialize authentication with robust validation"""
     if 'auth' not in st.session_state:
         try:
+            # Verify secrets are properly loaded
+            if not hasattr(st, 'secrets') or not st.secrets:
+                raise RuntimeError("Secrets not loaded - check secrets.toml exists")
+            
+            # Validate credentials section
+            if 'credentials' not in st.secrets:
+                raise KeyError("Missing [credentials] section in secrets.toml")
+                
+            # Validate password hash format
+            stored_hash = st.secrets.credentials.password.strip()
+            if not (isinstance(stored_hash, str) and 
+                   stored_hash.startswith(('$2a$', '$2b$')) and 
+                   len(stored_hash) == 60):
+                raise ValueError("Invalid password hash format - must be 60-character bcrypt hash")
+            
+            # Initialize session state
             st.session_state.auth = {
-                'email': st.secrets["credentials"]["email"],
-                'hashed_password': st.secrets["credentials"]["password"],
-                'cookie_key': st.secrets["cookie"]["key"],
-                'cookie_name': st.secrets["cookie"]["name"],
-                'cookie_expiry_days': st.secrets["cookie"]["expiry_days"],
+                'email': st.secrets.credentials.email,
+                'hashed_password': stored_hash,  # Using validated hash
+                'cookie_key': st.secrets.cookie.key,
+                'cookie_name': st.secrets.cookie.name,
+                'cookie_expiry_days': st.secrets.cookie.expiry_days,
                 'last_activity': datetime.now()
             }
-        except KeyError as e:
-            st.error(f"Missing secret configuration: {str(e)}")
-            st.stop()
-def check_authentication():
-    """Verify user credentials and session validity"""
-    if not st.session_state.get('authenticated', False):
-        return False
-    if 'auth' not in st.session_state:
-        return False
+            
+        except Exception as e:
+            st.error("🔐 Authentication System Error")
+            st.error(str(e))
+            st.error("Please check your secrets.toml configuration")
+            st.stop()  # Prevent app from running with invalid auth
     
-    # Check session timeout (30 minutes)
-    if (datetime.now() - st.session_state.auth['last_activity']) > timedelta(minutes=30):
-        st.session_state.clear()
-        return False
-    
-    st.session_state.auth['last_activity'] = datetime.now()
-    return True
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
 
 def login_widget():
-    st.title("🔒 Login")
+    """Secure login form with proper validation"""
+    st.title("🔒 Admin Login")
     
-    with st.form("login_form"):
+    with st.form("auth_form"):
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
         
@@ -55,27 +65,23 @@ def login_widget():
             try:
                 # Verify email
                 if email != st.session_state.auth['email']:
-                    st.error("Invalid email")
+                    st.error("Invalid credentials")
                     return
                 
-                # Get and validate hash
-                stored_hash = st.session_state.auth['hashed_password'].strip()
-                
-                if not (stored_hash.startswith(('$2a$', '$2b$')) and len(stored_hash) == 60):
-                    st.error("System error: Invalid password configuration")
-                    st.error("Please contact administrator")
-                    return
+                # Get stored hash
+                stored_hash = st.session_state.auth['hashed_password']
                 
                 # Verify password
                 if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
-                    st.error("Invalid password")
+                    st.error("Invalid credentials")
                     
             except Exception as e:
-                st.error(f"Login failed: {str(e)}")
-                st.stop()
+                st.error("Login error - please try again")
+                # For debugging during development:
+                st.error(str(e))
 
 # ==============================================
 # Core Modeling Functions
