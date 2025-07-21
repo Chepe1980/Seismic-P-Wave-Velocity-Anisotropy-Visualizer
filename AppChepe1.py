@@ -1,14 +1,11 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import streamlit as st
-from scipy.signal import convolve
-import pandas as pd
-import bcrypt
-import os
-from datetime import datetime, timedelta
-import hashlib
-
+streamlit==1.32.0
+numpy==1.26.0
+matplotlib==3.8.0
+plotly==5.18.0
+scipy==1.11.0
+pandas==2.1.0
+bcrypt==4.0.1
+openpyxl==3.1.2  # For Excel handling
 # ==============================================
 # Authentication Functions
 # ==============================================
