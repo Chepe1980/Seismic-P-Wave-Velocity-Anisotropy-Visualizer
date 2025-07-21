@@ -9,12 +9,7 @@ import os
 from datetime import datetime, timedelta
 import hashlib
 
-your-app/
-├── AppChepe1.py
-├── .streamlit/
-│   ├── secrets.toml  # Correct location for credentials
-│   └── config.toml
-└── requirements.txt
+
 # .streamlit/secrets.toml
 [credentials]
 email = "dali80_chepe@hotmail.com"  # Replace with your admin email
@@ -38,18 +33,21 @@ print(f"Hashed password: {hashed_password}")
 # ==============================================
 # Authentication Functions
 # ==============================================
+# In AppChepe1.py
 def initialize_authenticator():
     if 'auth' not in st.session_state:
         try:
             st.session_state.auth = {
                 'email': st.secrets["credentials"]["email"],
                 'hashed_password': st.secrets["credentials"]["password"],
-                # ... other cookie settings
+                'cookie_key': st.secrets["cookie"]["key"],
+                'cookie_name': st.secrets["cookie"]["name"],
+                'cookie_expiry_days': st.secrets["cookie"]["expiry_days"],
+                'last_activity': datetime.now()
             }
         except KeyError as e:
-            st.error(f"Missing secret: {e}")
+            st.error(f"Missing secret configuration: {str(e)}")
             st.stop()
-
 def check_authentication():
     """Verify user credentials and session validity"""
     if not st.session_state.get('authenticated', False):
