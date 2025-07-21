@@ -785,4 +785,3 @@ if __name__ == "__main__":
     
     st.title("Seismic P-Wave Velocity Anisotropy Visualizer")
 
-    st.write(data)
