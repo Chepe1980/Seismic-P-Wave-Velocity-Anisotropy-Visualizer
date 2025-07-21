@@ -16,28 +16,30 @@ import hashlib
 # ==============================================
 # In AppChepe1.py
 def initialize_authenticator():
-    """Initialize authentication with robust validation"""
+    """Initialize authentication with proper error handling"""
     if 'auth' not in st.session_state:
         try:
-            # Verify secrets are properly loaded
-            if not hasattr(st, 'secrets') or not st.secrets:
-                raise RuntimeError("Secrets not loaded - check secrets.toml exists")
-            
-            # Validate credentials section
-            if 'credentials' not in st.secrets:
-                raise KeyError("Missing [credentials] section in secrets.toml")
+            # Verify secrets exist
+            if not hasattr(st, 'secrets'):
+                raise RuntimeError("Secrets not loaded")
                 
-            # Validate password hash format
-            stored_hash = st.secrets.credentials.password.strip()
-            if not (isinstance(stored_hash, str) and 
-                   stored_hash.startswith(('$2a$', '$2b$')) and 
-                   len(stored_hash) == 60):
-                raise ValueError("Invalid password hash format - must be 60-character bcrypt hash")
+            required = {
+                'credentials': ['email', 'password'],
+                'cookie': ['key', 'name', 'expiry_days']
+            }
             
-            # Initialize session state
+            # Check all required secrets exist
+            for section, keys in required.items():
+                if section not in st.secrets:
+                    raise KeyError(f"Missing section: {section}")
+                for key in keys:
+                    if key not in st.secrets[section]:
+                        raise KeyError(f"Missing key: {section}.{key}")
+            
+            # Initialize if all checks pass
             st.session_state.auth = {
                 'email': st.secrets.credentials.email,
-                'hashed_password': stored_hash,  # Using validated hash
+                'hashed_password': st.secrets.credentials.password,
                 'cookie_key': st.secrets.cookie.key,
                 'cookie_name': st.secrets.cookie.name,
                 'cookie_expiry_days': st.secrets.cookie.expiry_days,
@@ -45,43 +47,47 @@ def initialize_authenticator():
             }
             
         except Exception as e:
-            st.error("🔐 Authentication System Error")
-            st.error(str(e))
-            st.error("Please check your secrets.toml configuration")
-            st.stop()  # Prevent app from running with invalid auth
+            st.error(f"Authentication setup failed: {str(e)}")
+            st.stop()
+
+def check_authentication():
+    """Verify user is authenticated and session is valid"""
+    if not st.session_state.get('authenticated', False):
+        return False
+    if 'auth' not in st.session_state:
+        return False
     
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
+    # Check session timeout (30 minutes)
+    if (datetime.now() - st.session_state.auth['last_activity']) > timedelta(minutes=30):
+        st.session_state.clear()
+        return False
+    
+    st.session_state.auth['last_activity'] = datetime.now()
+    return True
 
 def login_widget():
-    """Secure login form with proper validation"""
-    st.title("🔒 Admin Login")
+    """Secure login form with validation"""
+    st.title("🔒 AVAZ Modeling Suite - Login")
     
-    with st.form("auth_form"):
+    with st.form("login_form"):
         email = st.text_input("Email")
         password = st.text_input("Password", type="password")
         
         if st.form_submit_button("Login"):
             try:
-                # Verify email
                 if email != st.session_state.auth['email']:
-                    st.error("Invalid credentials")
+                    st.error("Invalid email")
                     return
                 
-                # Get stored hash
-                stored_hash = st.session_state.auth['hashed_password']
-                
-                # Verify password
-                if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
+                if bcrypt.checkpw(password.encode('utf-8'), 
+                                st.session_state.auth['hashed_password'].encode('utf-8')):
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
-                    st.error("Invalid credentials")
-                    
+                    st.error("Invalid password")
             except Exception as e:
-                st.error("Login error - please try again")
-                # For debugging during development:
-                st.error(str(e))
+                st.error(f"Login error: {str(e)}")
+
 
 # ==============================================
 # Core Modeling Functions
@@ -795,31 +801,21 @@ def main():
         page_icon="🧊"
     )
     
+    # Initialize authentication
     initialize_authenticator()
     
+    # Check authentication
     if not check_authentication():
         login_widget()
-        st.stop()  # Important: Stop execution if not authenticated
-    
-    # Initialize session state variables if they don't exist
-    if 'modeling_mode' not in st.session_state:
-        st.session_state.modeling_mode = "manual"
-    if 'excel_data_processed' not in st.session_state:
-        st.session_state.excel_data_processed = False
-    if 'show_results' not in st.session_state:
-        st.session_state.show_results = False
+        st.stop()
     
     # Main app interface
-    modeling_mode = st.sidebar.radio(
-        "Modeling Mode",
-        ["Manual Input", "Excel Import"],
-        index=0 if st.session_state.modeling_mode == "manual" else 1
-    )
+    st.title("AVAZ Modeling with Fluid Substitution")
     
-    if modeling_mode == "Manual Input":
-        manual_input_mode()
-    else:
-        excel_input_mode()
+    # [Rest of your application code]
+    # ...
 
 if __name__ == "__main__":
     main()
+
+
