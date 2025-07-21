@@ -784,5 +784,5 @@ if __name__ == "__main__":
     main()
     
     st.title("Seismic P-Wave Velocity Anisotropy Visualizer")
-    data = np.random.rand(10, 10)  # Example numpy usage
+
     st.write(data)
