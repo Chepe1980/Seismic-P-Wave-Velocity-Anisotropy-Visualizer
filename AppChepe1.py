@@ -58,19 +58,16 @@ def login_widget():
                     st.error("Invalid email")
                     return
                 
-                # Get and clean hash
+                # Get and validate hash
                 stored_hash = st.session_state.auth['hashed_password'].strip()
                 
-                # Hash validation
-                if not stored_hash.startswith(('$2a$', '$2b$')) or len(stored_hash) != 60:
-                    st.error("Configuration error: Invalid hash format")
+                if not (stored_hash.startswith(('$2a$', '$2b$')) and len(stored_hash) == 60):
+                    st.error("System error: Invalid password configuration")
+                    st.error("Please contact administrator")
                     return
                 
-                # Password verification
-                if bcrypt.checkpw(
-                    password.encode('utf-8'),
-                    stored_hash.encode('utf-8')
-                ):
+                # Verify password
+                if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
@@ -78,6 +75,7 @@ def login_widget():
                     
             except Exception as e:
                 st.error(f"Login failed: {str(e)}")
+                st.stop()
 
 # ==============================================
 # Core Modeling Functions
