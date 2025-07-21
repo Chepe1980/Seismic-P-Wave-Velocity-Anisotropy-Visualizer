@@ -30,8 +30,14 @@ if not is_token_valid(token):
     st.write("This app requires a valid access token.")
     valid_token = generate_token()
     st.write(f"Current valid token (expires in {VALID_HOURS} hours): {valid_token}")
-    st.write("Use this URL format: ")
-    st.code(f"{st.experimental_get_query_string().split('?')[0]}?token={valid_token}")
+    
+    # Get current URL without query parameters
+    current_url = st.query_params.to_dict()
+    base_url = st.rerun  # This won't work - we need a different approach
+    
+    # Better alternative for getting the base URL
+    st.write("Use this URL format:")
+    st.code(f"[Your app base URL]?token={valid_token}")
 else:
         # Properly indented block after else
     st.write("Welcome to the protected app!")
