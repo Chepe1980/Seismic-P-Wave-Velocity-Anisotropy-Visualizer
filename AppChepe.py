@@ -1,31 +1,37 @@
 import streamlit as st
-import time
 from datetime import datetime, timedelta
+import hashlib
 
-# Set your password and expiration time (e.g., 24 hours from now)
-PASSWORD = "HelloWorld2025!"
-EXPIRATION_HOURS = 24
-expiration_time = datetime.now() + timedelta(hours=EXPIRATION_HOURS)
+# Configuration
+SECRET_KEY = "HelloWorld2025!"
+VALID_HOURS = 24
 
-# Password check
-def check_password():
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
-    
-    if not st.session_state.authenticated:
-        password = st.text_input("Enter password:", type="password")
-        if password:
-            if password == PASSWORD and datetime.now() < expiration_time:
-                st.session_state.authenticated = True
-                st.rerun()
-            elif password == PASSWORD:
-                st.error("This link has expired.")
-            else:
-                st.error("Incorrect password")
+# Generate a temporary access token
+def generate_token(hours_valid=VALID_HOURS):
+    expiry = (datetime.now() + timedelta(hours=hours_valid)).timestamp()
+    return hashlib.sha256(f"{SECRET_KEY}{expiry}".encode()).hexdigest()[:8]
+
+# Check if token is valid
+def is_token_valid(token):
+    try:
+        # Compare with current valid tokens
+        current_token = generate_token()
+        next_hour_token = generate_token(hours_valid=VALID_HOURS+1)
+        return token in [current_token, next_hour_token]
+    except:
         return False
-    return True
 
-if check_password():
+# Main app
+query_params = st.experimental_get_query_params()
+token = query_params.get("token", [""])[0]
+
+if not is_token_valid(token):
+    st.title("Access Denied")
+    st.write("This app requires a valid access token.")
+    st.write(f"Current valid token (expires in {VALID_HOURS} hours): {generate_token()}")
+else:
+    # Your app content here
+    st.write("Welcome to the protected app!")
 
 
 import numpy as np
