@@ -62,9 +62,8 @@ def login_widget():
     st.markdown("---")
     st.caption("This system is restricted to authorized users only")
 
-
 # ==============================================
-# Core Functions (unchanged)
+# Core Modeling Functions
 # ==============================================
 def ricker_wavelet(freq, length, dt):
     """Generate a Ricker wavelet for seismic modeling"""
@@ -138,11 +137,13 @@ def create_3d_plot(x, y, z, vp):
     )
     return fig
 
+# ==============================================
+# Visualization Functions
+# ==============================================
 def pwave_anisotropy_section(epsilon, delta, vp0):
     """Visualize P-wave velocity anisotropy based on Thomsen parameters"""
     st.header("P-Wave Velocity Anisotropy Visualizer")
-    st.markdown("Explore how Thomsen parameters (ε, δ) affect P-wave velocity anisotropy.")
-
+    
     col1, col2 = st.columns([1, 3])
     
     with col1:
@@ -419,9 +420,6 @@ def display_results(results, seismic_cmap, selected_angle):
         )
         st.plotly_chart(fig_sub, use_container_width=True)
     
-    # [Rest of your display_results function remains unchanged]
-    # ...
-    
     # 2. 2D Comparison at nearest angle
     st.header(f"2D Comparison at {actual_angle:.1f}° Incidence (Closest to Selected {selected_angle}°)")
     
@@ -445,9 +443,6 @@ def display_results(results, seismic_cmap, selected_angle):
     ax2.set_title(f'Polar AVAZ Response at {actual_angle:.1f}° Incidence', pad=20)
     ax2.legend()
     st.pyplot(fig2)
-    
-    # Rest of the function remains the same...
-    # [Keep all other visualization code unchanged]
     
     # 4. Seismic Gathers Comparison
     st.header("Synthetic Seismic Gathers Comparison")
@@ -532,332 +527,245 @@ def display_results(results, seismic_cmap, selected_angle):
     )
     st.plotly_chart(fig6, use_container_width=True)
 
-def main():
-    st.set_page_config(layout="wide", page_title="AVAZ Modeling with Fluid Substitution")
-    st.title("AVAZ Modeling with Brown-Korringa Fluid Substitution")
-    
-    # Initialize session state
-    if 'modeling_mode' not in st.session_state:
-        st.session_state.modeling_mode = "manual"
-    if 'excel_data_processed' not in st.session_state:
-        st.session_state.excel_data_processed = False
-    if 'show_results' not in st.session_state:
-        st.session_state.show_results = False
-    
-    # Modeling mode selection
-    modeling_mode = st.sidebar.radio(
-        "Modeling Mode",
-        ["Manual Input", "Excel Import"],
-        index=0 if st.session_state.modeling_mode == "manual" else 1
-    )
-    
-    if modeling_mode == "Manual Input":
-        st.session_state.modeling_mode = "manual"
-        st.session_state.excel_data_processed = False
-        st.session_state.show_results = False
+# ==============================================
+# Mode-Specific Functions
+# ==============================================
+def manual_input_mode():
+    """Handle manual input mode"""
+    with st.sidebar:
+        st.header("Model Parameters")
         
-        with st.sidebar:
-            st.header("Model Parameters")
-            
-            # Rock properties for three layers
-            layers = ["Upper (1)", "Target (2)", "Lower (3)"]
-            params = {}
-            
-            for i, layer in enumerate(layers, 1):
-                st.subheader(f"Layer {layer}")
-                params[f'vp{i}'] = st.number_input(f"Vp{i} (m/s)", value=5500 if i!=2 else 4742)
-                params[f'vs{i}'] = st.number_input(f"Vs{i} (m/s)", value=3600 if i!=2 else 3292)
-                params[f'd{i}'] = st.number_input(f"Density{i} (g/cc)", value=2.6 if i!=2 else 2.4, step=0.1)
-                params[f'e{i}'] = st.number_input(f"ε{i}", value=0.1 if i==1 else (-0.01 if i==2 else 0.2), step=0.01)
-                params[f'g{i}'] = st.number_input(f"γ{i}", value=0.05 if i==1 else (-0.05 if i==2 else 0.15), step=0.01)
-                params[f'dlt{i}'] = st.number_input(f"δ{i}", value=0.0 if i==1 else (-0.13 if i==2 else 0.1), step=0.01)
-            
-            st.subheader("Acquisition Parameters")
-            selected_angle = st.slider(
-                "Angle of Incidence (deg)", 
-                1, 70, 30, 1,
-                help="Model will show results for this angle in 2D views"
-            )
-            freq = st.slider("Wavelet Frequency (Hz)", 10, 100, 45)
-            azimuth_step = st.slider("Azimuth Step (deg)", 1, 30, 10)
-            
-            st.subheader("Fluid Substitution Parameters")
-            enable_fluid_sub = st.checkbox("Enable Fluid Substitution", True)
-            if enable_fluid_sub:
-                params['phi'] = st.slider("Porosity (ϕ)", 0.01, 0.5, 0.2, 0.01)
-                params['Km'] = st.number_input("Mineral Bulk Modulus (GPa)", 10.0, 100.0, 37.0, 1.0)
-                params['Gm'] = st.number_input("Mineral Shear Modulus (GPa)", 10.0, 100.0, 44.0, 1.0)
-                params['Kf'] = st.number_input("Fluid Bulk Modulus (GPa)", 0.1, 5.0, 2.2, 0.1)
-                params['new_fluid_density'] = st.number_input("New Fluid Density (g/cc)", 0.1, 1.5, 1.0, 0.1)
-            
-            # Add colormap selection
-            st.subheader("Visualization Options")
-            seismic_cmap = st.selectbox(
-                "Seismic Colormap",
-                options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma'],
-                index=0
-            )
-            
-            # Add button to show P-wave anisotropy section
-            show_anisotropy = st.checkbox("Show P-Wave Anisotropy Section", False)
-            
-            if st.button("Run Modeling"):
-                st.session_state.show_results = True
-                st.session_state.model_params = params
-                st.session_state.enable_fluid_sub = enable_fluid_sub
-                st.session_state.seismic_cmap = seismic_cmap
-                st.session_state.selected_angle = selected_angle
-                st.session_state.azimuth_step = azimuth_step
-                st.session_state.freq = freq
-                st.session_state.show_anisotropy = show_anisotropy
+        # Rock properties for three layers
+        layers = ["Upper (1)", "Target (2)", "Lower (3)"]
+        params = {}
         
-        # Main workspace content
-        if st.session_state.show_results:
-            if st.session_state.show_anisotropy:
-                pwave_anisotropy_section(
-                    st.session_state.model_params['e2'],
-                    st.session_state.model_params['dlt2'],
-                    st.session_state.model_params['vp2']
+        for i, layer in enumerate(layers, 1):
+            st.subheader(f"Layer {layer}")
+            params[f'vp{i}'] = st.number_input(f"Vp{i} (m/s)", value=5500 if i!=2 else 4742)
+            params[f'vs{i}'] = st.number_input(f"Vs{i} (m/s)", value=3600 if i!=2 else 3292)
+            params[f'd{i}'] = st.number_input(f"Density{i} (g/cc)", value=2.6 if i!=2 else 2.4, step=0.1)
+            params[f'e{i}'] = st.number_input(f"ε{i}", value=0.1 if i==1 else (-0.01 if i==2 else 0.2), step=0.01)
+            params[f'g{i}'] = st.number_input(f"γ{i}", value=0.05 if i==1 else (-0.05 if i==2 else 0.15), step=0.01)
+            params[f'dlt{i}'] = st.number_input(f"δ{i}", value=0.0 if i==1 else (-0.13 if i==2 else 0.1), step=0.01)
+        
+        st.subheader("Acquisition Parameters")
+        selected_angle = st.slider(
+            "Angle of Incidence (deg)", 
+            1, 70, 30, 1,
+            help="Model will show results for this angle in 2D views"
+        )
+        freq = st.slider("Wavelet Frequency (Hz)", 10, 100, 45)
+        azimuth_step = st.slider("Azimuth Step (deg)", 1, 30, 10)
+        
+        st.subheader("Fluid Substitution Parameters")
+        enable_fluid_sub = st.checkbox("Enable Fluid Substitution", True)
+        if enable_fluid_sub:
+            params['phi'] = st.slider("Porosity (ϕ)", 0.01, 0.5, 0.2, 0.01)
+            params['Km'] = st.number_input("Mineral Bulk Modulus (GPa)", 10.0, 100.0, 37.0, 1.0)
+            params['Gm'] = st.number_input("Mineral Shear Modulus (GPa)", 10.0, 100.0, 44.0, 1.0)
+            params['Kf'] = st.number_input("Fluid Bulk Modulus (GPa)", 0.1, 5.0, 2.2, 0.1)
+            params['new_fluid_density'] = st.number_input("New Fluid Density (g/cc)", 0.1, 1.5, 1.0, 0.1)
+        
+        st.subheader("Visualization Options")
+        seismic_cmap = st.selectbox(
+            "Seismic Colormap",
+            options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma'],
+            index=0
+        )
+        
+        show_anisotropy = st.checkbox("Show P-Wave Anisotropy Section", False)
+        
+        if st.button("Run Modeling"):
+            st.session_state.show_results = True
+            st.session_state.model_params = params
+            st.session_state.enable_fluid_sub = enable_fluid_sub
+            st.session_state.seismic_cmap = seismic_cmap
+            st.session_state.selected_angle = selected_angle
+            st.session_state.azimuth_step = azimuth_step
+            st.session_state.freq = freq
+            st.session_state.show_anisotropy = show_anisotropy
+    
+    # Main workspace content
+    if st.session_state.get('show_results', False):
+        if st.session_state.show_anisotropy:
+            pwave_anisotropy_section(
+                st.session_state.model_params['e2'],
+                st.session_state.model_params['dlt2'],
+                st.session_state.model_params['vp2']
+            )
+        
+        results = run_modeling(
+            st.session_state.model_params,
+            st.session_state.enable_fluid_sub,
+            st.session_state.seismic_cmap,
+            st.session_state.selected_angle,
+            st.session_state.azimuth_step,
+            st.session_state.freq
+        )
+        display_results(
+            results,
+            st.session_state.seismic_cmap,
+            st.session_state.selected_angle
+        )
+
+def excel_input_mode():
+    """Handle Excel import mode"""
+    with st.sidebar:
+        st.header("Excel Import Settings")
+        
+        uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx", "xls"])
+        
+        if uploaded_file is not None:
+            try:
+                # Read Excel to get full depth range
+                df = pd.read_excel(uploaded_file, engine='openpyxl')
+                min_depth = float(df['Depth'].min())
+                max_depth = float(df['Depth'].max())
+                
+                st.subheader("Layer Depth Ranges")
+                
+                # Calculate default ranges (divide into thirds)
+                range_size = (max_depth - min_depth) / 3
+                default_ranges = [
+                    (min_depth, min_depth + range_size),
+                    (min_depth + range_size, min_depth + 2*range_size),
+                    (min_depth + 2*range_size, max_depth)
+                ]
+                
+                depth_ranges = []
+                layers = ["Upper (1)", "Target (2)", "Lower (3)"]
+                
+                for i, layer in enumerate(layers, 1):
+                    st.markdown(f"**{layer}**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        min_val = st.number_input(
+                            f"Min Depth {i}", 
+                            min_value=min_depth, 
+                            max_value=max_depth,
+                            value=default_ranges[i-1][0],
+                            key=f"min_depth_{i}"
+                        )
+                    with col2:
+                        max_val = st.number_input(
+                            f"Max Depth {i}", 
+                            min_value=min_depth, 
+                            max_value=max_depth,
+                            value=default_ranges[i-1][1],
+                            key=f"max_depth_{i}"
+                        )
+                    # Ensure valid range
+                    if min_val >= max_val:
+                        st.error(f"Layer {i}: Min must be less than Max")
+                        continue
+                    depth_ranges.append((min_val, max_val))
+                
+                # Store depth ranges in session state
+                if len(depth_ranges) == 3:
+                    st.session_state.depth_ranges = depth_ranges
+                    st.session_state.min_depth = min_depth
+                    st.session_state.max_depth = max_depth
+                
+                st.subheader("Acquisition Parameters")
+                selected_angle = st.slider(
+                    "Angle of Incidence (deg)", 
+                    1, 70, 30, 1,
+                    help="Model will show results for this angle in 2D views",
+                    key="excel_angle"
                 )
-            
-            results = run_modeling(
-                st.session_state.model_params,
-                st.session_state.enable_fluid_sub,
-                st.session_state.seismic_cmap,
-                st.session_state.selected_angle,
-                st.session_state.azimuth_step,
-                st.session_state.freq
-            )
-            display_results(
-                results,
-                st.session_state.seismic_cmap,
-                st.session_state.selected_angle
-            )
-    
-    else:  # Excel Import mode
-        st.session_state.modeling_mode = "excel"
-        st.session_state.show_results = False
-        
-        with st.sidebar:
-            st.header("Excel Import Settings")
-            
-            uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx", "xls"])
-            
-            if uploaded_file is not None:
-                try:
-                    # Read Excel to get full depth range
-                    df = pd.read_excel(uploaded_file, engine='openpyxl')
-                    min_depth = float(df['Depth'].min())
-                    max_depth = float(df['Depth'].max())
+                freq = st.slider("Wavelet Frequency (Hz)", 10, 100, 45, key="excel_freq")
+                azimuth_step = st.slider("Azimuth Step (deg)", 1, 30, 10, key="excel_azimuth_step")
+                
+                st.subheader("Fluid Substitution Parameters")
+                enable_fluid_sub = st.checkbox("Enable Fluid Substitution", True, key="excel_fluid_sub")
+                if enable_fluid_sub:
+                    phi = st.slider("Porosity (ϕ)", 0.01, 0.5, 0.2, 0.01, key="excel_phi")
+                    Km = st.number_input("Mineral Bulk Modulus (GPa)", 10.0, 100.0, 37.0, 1.0, key="excel_Km")
+                    Gm = st.number_input("Mineral Shear Modulus (GPa)", 10.0, 100.0, 44.0, 1.0, key="excel_Gm")
+                    Kf = st.number_input("Fluid Bulk Modulus (GPa)", 0.1, 5.0, 2.2, 0.1, key="excel_Kf")
+                    new_fluid_density = st.number_input("New Fluid Density (g/cc)", 0.1, 1.5, 1.0, 0.1, key="excel_fluid_density")
+                
+                st.subheader("Visualization Options")
+                seismic_cmap = st.selectbox(
+                    "Seismic Colormap",
+                    options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma'],
+                    index=0, 
+                    key="excel_seismic_cmap"
+                )
+                
+                show_anisotropy = st.checkbox("Show P-Wave Anisotropy Section", False, key="excel_show_anisotropy")
+                
+                if st.button("Run Modeling with Excel Data"):
+                    st.session_state.excel_data_processed = True
+                    st.session_state.uploaded_file = uploaded_file
+                    st.session_state.enable_fluid_sub = enable_fluid_sub
+                    st.session_state.seismic_cmap = seismic_cmap
+                    st.session_state.selected_angle = selected_angle
+                    st.session_state.azimuth_step = azimuth_step
+                    st.session_state.freq = freq
+                    st.session_state.show_anisotropy = show_anisotropy
                     
-                    st.subheader("Layer Depth Ranges")
-                    
-                    # Calculate default ranges (divide into thirds)
-                    range_size = (max_depth - min_depth) / 3
-                    default_ranges = [
-                        (min_depth, min_depth + range_size),
-                        (min_depth + range_size, min_depth + 2*range_size),
-                        (min_depth + 2*range_size, max_depth)
-                    ]
-                    
-                    depth_ranges = []
-                    layers = ["Upper (1)", "Target (2)", "Lower (3)"]
-                    
-                    for i, layer in enumerate(layers, 1):
-                        st.markdown(f"**{layer}**")
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            min_val = st.number_input(
-                                f"Min Depth {i}", 
-                                min_value=min_depth, 
-                                max_value=max_depth,
-                                value=default_ranges[i-1][0],
-                                key=f"min_depth_{i}"
-                            )
-                        with col2:
-                            max_val = st.number_input(
-                                f"Max Depth {i}", 
-                                min_value=min_depth, 
-                                max_value=max_depth,
-                                value=default_ranges[i-1][1],
-                                key=f"max_depth_{i}"
-                            )
-                        # Ensure valid range
-                        if min_val >= max_val:
-                            st.error(f"Layer {i}: Min must be less than Max")
-                            continue
-                        depth_ranges.append((min_val, max_val))
-                    
-                    # Store depth ranges in session state
-                    if len(depth_ranges) == 3:
-                        st.session_state.depth_ranges = depth_ranges
-                        st.session_state.min_depth = min_depth
-                        st.session_state.max_depth = max_depth
-                    
-                    st.subheader("Acquisition Parameters")
-                    selected_angle = st.slider(
-                        "Angle of Incidence (deg)", 
-                        1, 70, 30, 1,
-                        help="Model will show results for this angle in 2D views",
-                        key="excel_angle"
-                    )
-                    freq = st.slider("Wavelet Frequency (Hz)", 10, 100, 45, key="excel_freq")
-                    azimuth_step = st.slider("Azimuth Step (deg)", 1, 30, 10, key="excel_azimuth_step")
-                    
-                    st.subheader("Fluid Substitution Parameters")
-                    enable_fluid_sub = st.checkbox("Enable Fluid Substitution", True, key="excel_fluid_sub")
                     if enable_fluid_sub:
-                        phi = st.slider("Porosity (ϕ)", 0.01, 0.5, 0.2, 0.01, key="excel_phi")
-                        Km = st.number_input("Mineral Bulk Modulus (GPa)", 10.0, 100.0, 37.0, 1.0, key="excel_Km")
-                        Gm = st.number_input("Mineral Shear Modulus (GPa)", 10.0, 100.0, 44.0, 1.0, key="excel_Gm")
-                        Kf = st.number_input("Fluid Bulk Modulus (GPa)", 0.1, 5.0, 2.2, 0.1, key="excel_Kf")
-                        new_fluid_density = st.number_input("New Fluid Density (g/cc)", 0.1, 1.5, 1.0, 0.1, key="excel_fluid_density")
-                    
-                    st.subheader("Visualization Options")
-                    seismic_cmap = st.selectbox(
-                        "Seismic Colormap",
-                        options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma'],
-                        index=0, 
-                        key="excel_seismic_cmap"
-                    )
-                    
-                    show_anisotropy = st.checkbox("Show P-Wave Anisotropy Section", False, key="excel_show_anisotropy")
-                    
-                    if st.button("Run Modeling with Excel Data"):
-                        st.session_state.excel_data_processed = True
-                        st.session_state.uploaded_file = uploaded_file
-                        st.session_state.enable_fluid_sub = enable_fluid_sub
-                        st.session_state.seismic_cmap = seismic_cmap
-                        st.session_state.selected_angle = selected_angle
-                        st.session_state.azimuth_step = azimuth_step
-                        st.session_state.freq = freq
-                        st.session_state.show_anisotropy = show_anisotropy
-                        
-                        if enable_fluid_sub:
-                            st.session_state.phi = phi
-                            st.session_state.Km = Km
-                            st.session_state.Gm = Gm
-                            st.session_state.Kf = Kf
-                            st.session_state.new_fluid_density = new_fluid_density
-                
-                except Exception as e:
-                    st.error(f"Error reading Excel file: {str(e)}")
-        
-        # Main workspace content for Excel mode
-        if uploaded_file is not None and hasattr(st.session_state, 'depth_ranges'):
-            st.header("Depth Range Visualization")
-            plot_depth_ranges(
-                st.session_state.depth_ranges,
-                st.session_state.min_depth,
-                st.session_state.max_depth
-            )
+                        st.session_state.phi = phi
+                        st.session_state.Km = Km
+                        st.session_state.Gm = Gm
+                        st.session_state.Kf = Kf
+                        st.session_state.new_fluid_density = new_fluid_density
             
-            if st.session_state.excel_data_processed:
-                try:
-                    # Process Excel data with individual layer ranges
-                    params = process_excel_data(
-                        st.session_state.uploaded_file,
-                        st.session_state.depth_ranges
-                    )
-                    
-                    if params is not None:
-                        # Add fluid substitution parameters if enabled
-                        if st.session_state.enable_fluid_sub:
-                            params.update({
-                                'phi': st.session_state.phi,
-                                'Km': st.session_state.Km,
-                                'Gm': st.session_state.Gm,
-                                'Kf': st.session_state.Kf,
-                                'new_fluid_density': st.session_state.new_fluid_density
-                            })
-                        
-                        if st.session_state.show_anisotropy:
-                            pwave_anisotropy_section(params['e2'], params['dlt2'], params['vp2'])
-                        
-                        # Run modeling
-                        results = run_modeling(
-                            params,
-                            st.session_state.enable_fluid_sub,
-                            st.session_state.seismic_cmap,
-                            st.session_state.selected_angle,
-                            st.session_state.azimuth_step,
-                            st.session_state.freq
-                        )
-                        display_results(
-                            results,
-                            st.session_state.seismic_cmap,
-                            st.session_state.selected_angle
-                        )
+            except Exception as e:
+                st.error(f"Error reading Excel file: {str(e)}")
+    
+    # Main workspace content for Excel mode
+    if uploaded_file is not None and hasattr(st.session_state, 'depth_ranges'):
+        st.header("Depth Range Visualization")
+        plot_depth_ranges(
+            st.session_state.depth_ranges,
+            st.session_state.min_depth,
+            st.session_state.max_depth
+        )
+        
+        if st.session_state.get('excel_data_processed', False):
+            try:
+                # Process Excel data with individual layer ranges
+                params = process_excel_data(
+                    st.session_state.uploaded_file,
+                    st.session_state.depth_ranges
+                )
                 
-                except Exception as e:
-                    st.error(f"Modeling error: {str(e)}")
-
-
-                    def sidebar_controls():
-    """Render the sidebar controls"""
-    with st.sidebar:
-        st.title("Controls")
-        
-        if st.button("Logout", key="logout_btn"):
-            st.session_state.clear()
-            st.rerun()
-        
-        st.markdown("---")
-        modeling_mode = st.radio(
-            "Modeling Mode",
-            ["Manual Input", "Excel Import"],
-            index=0 if st.session_state.get("modeling_mode", "manual") == "manual" else 1
-        )
-        
-        # [Rest of your original sidebar controls...]
-        return modeling_mode
-
-def main_app_interface():
-    """Main application interface after authentication"""
-    modeling_mode = sidebar_controls()
-    
-    st.title("AVAZ Modeling with Fluid Substitution")
-    
-    if modeling_mode == "Manual Input":
-        manual_input_mode()
-    else:
-        excel_input_mode()
+                if params is not None:
+                    # Add fluid substitution parameters if enabled
+                    if st.session_state.enable_fluid_sub:
+                        params.update({
+                            'phi': st.session_state.phi,
+                            'Km': st.session_state.Km,
+                            'Gm': st.session_state.Gm,
+                            'Kf': st.session_state.Kf,
+                            'new_fluid_density': st.session_state.new_fluid_density
+                        })
+                    
+                    if st.session_state.show_anisotropy:
+                        pwave_anisotropy_section(params['e2'], params['dlt2'], params['vp2'])
+                    
+                    # Run modeling
+                    results = run_modeling(
+                        params,
+                        st.session_state.enable_fluid_sub,
+                        st.session_state.seismic_cmap,
+                        st.session_state.selected_angle,
+                        st.session_state.azimuth_step,
+                        st.session_state.freq
+                    )
+                    display_results(
+                        results,
+                        st.session_state.seismic_cmap,
+                        st.session_state.selected_angle
+                    )
+            
+            except Exception as e:
+                st.error(f"Modeling error: {str(e)}")
 
 # ==============================================
-# Entry Point
-# ==============================================
-def sidebar_controls():
-    """Render the sidebar controls"""
-    with st.sidebar:
-        st.title("Controls")
-        
-        if st.button("Logout"):
-            st.session_state.clear()
-            st.rerun()
-        
-        st.markdown("---")
-        modeling_mode = st.radio(
-            "Modeling Mode",
-            ["Manual Input", "Excel Import"],
-            index=0 if st.session_state.get("modeling_mode", "manual") == "manual" else 1
-        )
-        
-        # Add any other sidebar controls needed
-        return modeling_mode
-
-def main_app_interface():
-    """Main application interface after authentication"""
-    modeling_mode = sidebar_controls()
-    
-    st.title("AVAZ Modeling with Fluid Substitution")
-    
-    if modeling_mode == "Manual Input":
-        manual_input_mode()
-    else:
-        excel_input_mode()
-
-# ==============================================
-# Entry Point
+# Main Application
 # ==============================================
 def main():
     st.set_page_config(
@@ -872,7 +780,25 @@ def main():
         login_widget()
         st.stop()  # Important: Stop execution if not authenticated
     
-    main_app_interface()
+    # Initialize session state variables if they don't exist
+    if 'modeling_mode' not in st.session_state:
+        st.session_state.modeling_mode = "manual"
+    if 'excel_data_processed' not in st.session_state:
+        st.session_state.excel_data_processed = False
+    if 'show_results' not in st.session_state:
+        st.session_state.show_results = False
+    
+    # Main app interface
+    modeling_mode = st.sidebar.radio(
+        "Modeling Mode",
+        ["Manual Input", "Excel Import"],
+        index=0 if st.session_state.modeling_mode == "manual" else 1
+    )
+    
+    if modeling_mode == "Manual Input":
+        manual_input_mode()
+    else:
+        excel_input_mode()
 
 if __name__ == "__main__":
     main()
