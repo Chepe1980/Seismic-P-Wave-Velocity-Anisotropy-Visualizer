@@ -29,7 +29,7 @@ if not is_token_valid(token):
     st.title("Access Denied")
     st.write("This app requires a valid access token.")
     st.write(f"Current valid token (expires in {VALID_HOURS} hours): {generate_token()}")
-else:
+#else:
 
 
 
