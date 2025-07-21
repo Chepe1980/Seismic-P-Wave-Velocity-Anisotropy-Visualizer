@@ -783,5 +783,5 @@ def main():
 if __name__ == "__main__":
     main()
     
-    st.title("Seismic P-Wave Velocity Anisotropy Visualizer")
+    #st.title("Seismic P-Wave Velocity Anisotropy Visualizer")
 
