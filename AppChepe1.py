@@ -45,42 +45,39 @@ def check_authentication():
     return True
 
 def login_widget():
-    st.title("🔒 AVAZ Modeling Suite - Login")
+    st.title("🔒 Login")
     
     with st.form("login_form"):
-        email = st.text_input("Email", key="login_email")
-        password = st.text_input("Password", type="password", key="login_pw")
+        email = st.text_input("Email")
+        password = st.text_input("Password", type="password")
         
         if st.form_submit_button("Login"):
             try:
-                # 1. Verify email
+                # Verify email
                 if email != st.session_state.auth['email']:
-                    st.error("Unauthorized email address")
+                    st.error("Invalid email")
                     return
                 
-                # 2. Get and verify hash
-                stored_hash = st.session_state.auth['hashed_password']
-                if not stored_hash.startswith(('$2a$', '$2b$')):
-                    st.error("Invalid password hash format")
+                # Get and clean hash
+                stored_hash = st.session_state.auth['hashed_password'].strip()
+                
+                # Hash validation
+                if not stored_hash.startswith(('$2a$', '$2b$')) or len(stored_hash) != 60:
+                    st.error("Configuration error: Invalid hash format")
                     return
                 
-                # 3. Verify password with error handling
-                try:
-                    if bcrypt.checkpw(
-                        password.encode('utf-8'), 
-                        stored_hash.encode('utf-8')
-                    ):
-                        st.session_state.authenticated = True
-                        st.rerun()
-                    else:
-                        st.error("Incorrect password")
-                except ValueError as e:
-                    st.error("Invalid password hash")
-                    st.error(str(e))
-                
+                # Password verification
+                if bcrypt.checkpw(
+                    password.encode('utf-8'),
+                    stored_hash.encode('utf-8')
+                ):
+                    st.session_state.authenticated = True
+                    st.rerun()
+                else:
+                    st.error("Invalid password")
+                    
             except Exception as e:
-                st.error(f"Login error: {str(e)}")
-                st.stop()
+                st.error(f"Login failed: {str(e)}")
 
 # ==============================================
 # Core Modeling Functions
