@@ -30,8 +30,7 @@ if not is_token_valid(token):
     st.write("This app requires a valid access token.")
     st.write(f"Current valid token (expires in {VALID_HOURS} hours): {generate_token()}")
 else:
-    # Your app content here
-    st.write("Welcome to the protected app!")
+
 
 
 import numpy as np
@@ -773,4 +772,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
     st.write("Welcome to the protected app!")
