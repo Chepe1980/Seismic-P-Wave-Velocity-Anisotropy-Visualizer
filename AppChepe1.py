@@ -34,35 +34,16 @@ print(f"Hashed password: {hashed_password}")
 # Authentication Functions
 # ==============================================
 def initialize_authenticator():
-    """Initialize authentication system with secure password hashing"""
     if 'auth' not in st.session_state:
         try:
-            # Verify all required secrets exist
-            required_secrets = {
-                'credentials': ['email', 'password'],
-                'cookie': ['key', 'name', 'expiry_days']
-            }
-            
-            for section, keys in required_secrets.items():
-                for key in keys:
-                    if key not in st.secrets[section]:
-                        raise KeyError(f"Missing secret: {section}.{key}")
-            
             st.session_state.auth = {
-                'email': st.secrets.credentials.email,
-                'hashed_password': st.secrets.credentials.password,
-                'cookie_key': st.secrets.cookie.key,
-                'cookie_name': st.secrets.cookie.name,
-                'cookie_expiry_days': st.secrets.cookie.expiry_days,
-                'last_activity': datetime.now()
+                'email': st.secrets["credentials"]["email"],
+                'hashed_password': st.secrets["credentials"]["password"],
+                # ... other cookie settings
             }
-            
-        except Exception as e:
-            st.error(f"Authentication configuration error: {str(e)}")
+        except KeyError as e:
+            st.error(f"Missing secret: {e}")
             st.stop()
-    
-    if 'authenticated' not in st.session_state:
-        st.session_state.authenticated = False
 
 def check_authentication():
     """Verify user credentials and session validity"""
