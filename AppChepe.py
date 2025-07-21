@@ -1,7 +1,11 @@
 import streamlit as st
 from datetime import datetime, timedelta
 import hashlib
+import numpy as np  # This import should be at the top with others
 
+# Configuration
+SECRET_KEY = "HelloWorld2025!"
+VALID_HOURS = 1
 # Generate a temporary access token
 def generate_token(hours_valid=VALID_HOURS):
     expiry = (datetime.now() + timedelta(hours=hours_valid)).timestamp()
@@ -29,6 +33,8 @@ if not is_token_valid(token):
     st.write("Use this URL format: ")
     st.code(f"{st.experimental_get_query_string().split('?')[0]}?token={valid_token}")
 else:
+        # Properly indented block after else
+    st.write("Welcome to the protected app!")
 
 
 import numpy as np
@@ -770,6 +776,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    st.write("Welcome to the protected app!")
-    st.write("Token is valid. App content goes here...")
+    
+    st.title("Seismic P-Wave Velocity Anisotropy Visualizer")
+    data = np.random.rand(10, 10)  # Example numpy usage
+    st.write(data)
