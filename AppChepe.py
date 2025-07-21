@@ -1,3 +1,33 @@
+import streamlit as st
+import time
+from datetime import datetime, timedelta
+
+# Set your password and expiration time (e.g., 24 hours from now)
+PASSWORD = "HelloWorld2025!"
+EXPIRATION_HOURS = 24
+expiration_time = datetime.now() + timedelta(hours=EXPIRATION_HOURS)
+
+# Password check
+def check_password():
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if not st.session_state.authenticated:
+        password = st.text_input("Enter password:", type="password")
+        if password:
+            if password == PASSWORD and datetime.now() < expiration_time:
+                st.session_state.authenticated = True
+                st.rerun()
+            elif password == PASSWORD:
+                st.error("This link has expired.")
+            else:
+                st.error("Incorrect password")
+        return False
+    return True
+
+if check_password():
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
@@ -737,3 +767,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    st.write("Welcome to the protected app!")
