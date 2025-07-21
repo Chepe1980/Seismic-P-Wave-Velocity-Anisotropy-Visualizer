@@ -9,6 +9,9 @@ import os
 from datetime import datetime, timedelta
 import hashlib
 
+password = "1234"  # Change this to your actual password
+hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+print(hashed)
 # ==============================================
 # Authentication Functions
 # ==============================================
