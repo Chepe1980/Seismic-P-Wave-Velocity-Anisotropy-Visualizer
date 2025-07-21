@@ -4,7 +4,7 @@ import hashlib
 
 # Configuration
 SECRET_KEY = "HelloWorld2025!"
-VALID_HOURS = 24
+VALID_HOURS = 0.01
 
 # Generate a temporary access token
 def generate_token(hours_valid=VALID_HOURS):
