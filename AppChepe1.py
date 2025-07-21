@@ -9,7 +9,12 @@ import os
 from datetime import datetime, timedelta
 import hashlib
 
-
+your-app/
+├── AppChepe1.py
+├── .streamlit/
+│   ├── secrets.toml  # Correct location for credentials
+│   └── config.toml
+└── requirements.txt
 # .streamlit/secrets.toml
 [credentials]
 email = "dali80_chepe@hotmail.com"  # Replace with your admin email
