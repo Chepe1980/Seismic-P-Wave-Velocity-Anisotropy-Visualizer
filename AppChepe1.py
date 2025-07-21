@@ -20,7 +20,7 @@ key = "a_very_long_random_string_at_least_32_characters"
 name = "auth_cookie"
 expiry_days = 30
 
- Generate a hashed password
+ #Generate a hashed password
 password = "your_secure_password"  # Change this to your real password
 hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 print(f"Hashed password: {hashed_password}")
