@@ -53,17 +53,28 @@ def login_widget():
         password = st.text_input("Password", type="password", key="login_pw")
         
         if st.form_submit_button("Login"):
-            if email == st.session_state.auth['email']:
-                if bcrypt.checkpw(password.encode(), st.session_state.auth['hashed_password'].encode()):
+            try:
+                # 1. Verify email matches
+                if email != st.session_state.auth['email']:
+                    st.error("Unauthorized email address")
+                    return
+                
+                # 2. Get stored hash and verify format
+                stored_hash = st.session_state.auth['hashed_password']
+                if not isinstance(stored_hash, str) or not stored_hash.startswith('$2b$'):
+                    st.error("Invalid password hash configuration")
+                    return
+                
+                # 3. Verify password
+                if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
                     st.session_state.authenticated = True
                     st.rerun()
                 else:
                     st.error("Incorrect password")
-            else:
-                st.error("Unauthorized email address")
-    
-    st.markdown("---")
-    st.caption("This system is restricted to authorized users only")
+                    
+            except Exception as e:
+                st.error(f"Login error: {str(e)}")
+                st.error("Please contact administrator")
 
 # ==============================================
 # Core Modeling Functions
