@@ -45,7 +45,6 @@ def check_authentication():
     return True
 
 def login_widget():
-    """Display login form and handle authentication"""
     st.title("🔒 AVAZ Modeling Suite - Login")
     
     with st.form("login_form"):
@@ -54,27 +53,34 @@ def login_widget():
         
         if st.form_submit_button("Login"):
             try:
-                # 1. Verify email matches
+                # 1. Verify email
                 if email != st.session_state.auth['email']:
                     st.error("Unauthorized email address")
                     return
                 
-                # 2. Get stored hash and verify format
+                # 2. Get and verify hash
                 stored_hash = st.session_state.auth['hashed_password']
-                if not isinstance(stored_hash, str) or not stored_hash.startswith('$2b$'):
-                    st.error("Invalid password hash configuration")
+                if not stored_hash.startswith(('$2a$', '$2b$')):
+                    st.error("Invalid password hash format")
                     return
                 
-                # 3. Verify password
-                if bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8')):
-                    st.session_state.authenticated = True
-                    st.rerun()
-                else:
-                    st.error("Incorrect password")
-                    
+                # 3. Verify password with error handling
+                try:
+                    if bcrypt.checkpw(
+                        password.encode('utf-8'), 
+                        stored_hash.encode('utf-8')
+                    ):
+                        st.session_state.authenticated = True
+                        st.rerun()
+                    else:
+                        st.error("Incorrect password")
+                except ValueError as e:
+                    st.error("Invalid password hash")
+                    st.error(str(e))
+                
             except Exception as e:
                 st.error(f"Login error: {str(e)}")
-                st.error("Please contact administrator")
+                st.stop()
 
 # ==============================================
 # Core Modeling Functions
