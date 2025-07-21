@@ -7,4 +7,5 @@ bokeh
 openpyxl
 bcrypt
 hashlib
+os
 
