@@ -2,10 +2,6 @@ import streamlit as st
 from datetime import datetime, timedelta
 import hashlib
 
-# Configuration
-SECRET_KEY = "HelloWorld2025!"
-VALID_HOURS = 0.01
-
 # Generate a temporary access token
 def generate_token(hours_valid=VALID_HOURS):
     expiry = (datetime.now() + timedelta(hours=hours_valid)).timestamp()
@@ -14,7 +10,7 @@ def generate_token(hours_valid=VALID_HOURS):
 # Check if token is valid
 def is_token_valid(token):
     try:
-        # Compare with current valid tokens
+        # Compare with current valid tokens (current hour and next hour for buffer)
         current_token = generate_token()
         next_hour_token = generate_token(hours_valid=VALID_HOURS+1)
         return token in [current_token, next_hour_token]
@@ -22,15 +18,17 @@ def is_token_valid(token):
         return False
 
 # Main app
-query_params =  st.experimental_get_query_params()
+query_params = st.query_params
 token = query_params.get("token", [""])[0]
 
 if not is_token_valid(token):
     st.title("Access Denied")
     st.write("This app requires a valid access token.")
-    st.write(f"Current valid token (expires in {VALID_HOURS} hours): {generate_token()}")
-#else:
-
+    valid_token = generate_token()
+    st.write(f"Current valid token (expires in {VALID_HOURS} hours): {valid_token}")
+    st.write("Use this URL format: ")
+    st.code(f"{st.experimental_get_query_string().split('?')[0]}?token={valid_token}")
+else:
 
 
 import numpy as np
@@ -774,3 +772,4 @@ if __name__ == "__main__":
     main()
 
     st.write("Welcome to the protected app!")
+    st.write("Token is valid. App content goes here...")
