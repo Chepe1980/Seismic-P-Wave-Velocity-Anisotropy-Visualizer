@@ -21,7 +21,7 @@ name = "auth_cookie"
 expiry_days = 30
 
  #Generate a hashed password
-password = "your_secure_password"  # Change this to your real password
+password = "HelloWorld2025!"  # Change this to your real password
 hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 print(f"Hashed password: {hashed_password}")
 
