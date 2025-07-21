@@ -11,12 +11,12 @@ import hashlib
 
 
 # .streamlit/secrets.toml
-#[credentials]
+[credentials]
 email = "dali80_chepe@hotmail.com"  # Replace with your admin email
-password = "HelloWorld2025!"  # Replace with your hashed password
+password = "$2b$12$XpX7pZR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR"  # Replace with your hashed password
 
-#[cookie]
-key = "a_very_long_random_string_at_least_32_characters"
+[cookie]
+key = "$2b$12$XpX7pZR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR9zR"
 name = "auth_cookie"
 expiry_days = 30
 
