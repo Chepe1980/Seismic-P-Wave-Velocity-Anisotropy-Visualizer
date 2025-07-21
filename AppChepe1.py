@@ -9,23 +9,58 @@ import os
 from datetime import datetime, timedelta
 import hashlib
 
-password = "1234"  # Change this to your actual password
-hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-print(hashed)
+
+# .streamlit/secrets.toml
+[credentials]
+email = "dali80_chepe@hotmail.com"  # Replace with your admin email
+password = "HelloWorld2025!"  # Replace with your hashed password
+
+[cookie]
+key = "a_very_long_random_string_at_least_32_characters"
+name = "auth_cookie"
+expiry_days = 30
+
+ Generate a hashed password
+password = "your_secure_password"  # Change this to your real password
+hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+print(f"Hashed password: {hashed_password}")
+
+
+
+
+
+
 # ==============================================
 # Authentication Functions
 # ==============================================
 def initialize_authenticator():
     """Initialize authentication system with secure password hashing"""
     if 'auth' not in st.session_state:
-        st.session_state.auth = {
-            'email': st.secrets["credentials"]["email"],
-            'hashed_password': st.secrets["credentials"]["password"],
-            'cookie_key': st.secrets["cookie"]["key"],
-            'cookie_name': st.secrets["cookie"]["name"],
-            'cookie_expiry_days': st.secrets["cookie"]["expiry_days"],
-            'last_activity': datetime.now()
-        }
+        try:
+            # Verify all required secrets exist
+            required_secrets = {
+                'credentials': ['email', 'password'],
+                'cookie': ['key', 'name', 'expiry_days']
+            }
+            
+            for section, keys in required_secrets.items():
+                for key in keys:
+                    if key not in st.secrets[section]:
+                        raise KeyError(f"Missing secret: {section}.{key}")
+            
+            st.session_state.auth = {
+                'email': st.secrets.credentials.email,
+                'hashed_password': st.secrets.credentials.password,
+                'cookie_key': st.secrets.cookie.key,
+                'cookie_name': st.secrets.cookie.name,
+                'cookie_expiry_days': st.secrets.cookie.expiry_days,
+                'last_activity': datetime.now()
+            }
+            
+        except Exception as e:
+            st.error(f"Authentication configuration error: {str(e)}")
+            st.stop()
+    
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
 
