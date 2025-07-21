@@ -8,16 +8,13 @@ import bcrypt
 import os
 from datetime import datetime, timedelta
 import hashlib
+
 # ==============================================
 # Authentication Functions
 # ==============================================
 def initialize_authenticator():
     """Initialize authentication system with secure password hashing"""
     if 'auth' not in st.session_state:
-        # Generate these values once and store in secrets.toml
-        # hashed_pw = bcrypt.hashpw("your_password".encode(), bcrypt.gensalt()).decode()
-        # cookie_key = hashlib.sha256(os.urandom(64)).hexdigest()
-        
         st.session_state.auth = {
             'email': st.secrets["credentials"]["email"],
             'hashed_password': st.secrets["credentials"]["password"],
@@ -26,9 +23,13 @@ def initialize_authenticator():
             'cookie_expiry_days': st.secrets["cookie"]["expiry_days"],
             'last_activity': datetime.now()
         }
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
 
 def check_authentication():
     """Verify user credentials and session validity"""
+    if not st.session_state.get('authenticated', False):
+        return False
     if 'auth' not in st.session_state:
         return False
     
@@ -42,13 +43,13 @@ def check_authentication():
 
 def login_widget():
     """Display login form and handle authentication"""
-    with st.container():
-        st.title("🔒 AVAZ Modeling Suite - Login")
-        
+    st.title("🔒 AVAZ Modeling Suite - Login")
+    
+    with st.form("login_form"):
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Password", type="password", key="login_pw")
         
-        if st.button("Login", key="login_btn"):
+        if st.form_submit_button("Login"):
             if email == st.session_state.auth['email']:
                 if bcrypt.checkpw(password.encode(), st.session_state.auth['hashed_password'].encode()):
                     st.session_state.authenticated = True
@@ -57,9 +58,10 @@ def login_widget():
                     st.error("Incorrect password")
             else:
                 st.error("Unauthorized email address")
-        
-        st.markdown("---")
-        st.caption("This system is restricted to authorized users only")
+    
+    st.markdown("---")
+    st.caption("This system is restricted to authorized users only")
+
 
 # ==============================================
 # Core Functions (unchanged)
@@ -824,6 +826,39 @@ def main_app_interface():
 # ==============================================
 # Entry Point
 # ==============================================
+def sidebar_controls():
+    """Render the sidebar controls"""
+    with st.sidebar:
+        st.title("Controls")
+        
+        if st.button("Logout"):
+            st.session_state.clear()
+            st.rerun()
+        
+        st.markdown("---")
+        modeling_mode = st.radio(
+            "Modeling Mode",
+            ["Manual Input", "Excel Import"],
+            index=0 if st.session_state.get("modeling_mode", "manual") == "manual" else 1
+        )
+        
+        # Add any other sidebar controls needed
+        return modeling_mode
+
+def main_app_interface():
+    """Main application interface after authentication"""
+    modeling_mode = sidebar_controls()
+    
+    st.title("AVAZ Modeling with Fluid Substitution")
+    
+    if modeling_mode == "Manual Input":
+        manual_input_mode()
+    else:
+        excel_input_mode()
+
+# ==============================================
+# Entry Point
+# ==============================================
 def main():
     st.set_page_config(
         layout="wide",
@@ -835,14 +870,9 @@ def main():
     
     if not check_authentication():
         login_widget()
-        return
+        st.stop()  # Important: Stop execution if not authenticated
     
     main_app_interface()
-
-
-
-
-                    
 
 if __name__ == "__main__":
     main()
