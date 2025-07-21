@@ -22,7 +22,7 @@ def is_token_valid(token):
         return False
 
 # Main app
-query_params = st.experimental_get_query_params()
+query_params = st.query_params()
 token = query_params.get("token", [""])[0]
 
 if not is_token_valid(token):
