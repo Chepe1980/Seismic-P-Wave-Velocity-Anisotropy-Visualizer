@@ -10,7 +10,21 @@ from datetime import datetime, timedelta
 import hashlib
 
 
+# Generate a bcrypt hash (automatically handles salt)
+password = b"Xq8#7zN$2pL*9!vB&5mC@wE+dK%4rF^6gH"  # Must be bytes-like object
+salt = bcrypt.gensalt(rounds=12)  # Default is 12, but explicit for clarity
+hashed_password = bcrypt.hashpw(password, salt)
 
+# Print results (will be 60 characters)
+print("Password:", password.decode())
+print("Salt:", salt.decode())
+print("Hashed Password:", hashed_password.decode())  # Full bcrypt hash
+
+# Verify the hash later (e.g., during login)
+if bcrypt.checkpw(password, hashed_password):
+    print("✅ Hash verification SUCCESS!")
+else:
+    print("❌ Hash verification FAILED!")
 # ==============================================
 # Authentication Functions
 # ==============================================
