@@ -16,38 +16,15 @@ import hashlib
 # ==============================================
 # In AppChepe1.py
 def initialize_authenticator():
-    """Initialize authentication with proper error handling"""
     if 'auth' not in st.session_state:
         try:
-            # Verify secrets exist
-            if not hasattr(st, 'secrets'):
-                raise RuntimeError("Secrets not loaded")
-                
-            required = {
-                'credentials': ['email', 'password'],
-                'cookie': ['key', 'name', 'expiry_days']
-            }
-            
-            # Check all required secrets exist
-            for section, keys in required.items():
-                if section not in st.secrets:
-                    raise KeyError(f"Missing section: {section}")
-                for key in keys:
-                    if key not in st.secrets[section]:
-                        raise KeyError(f"Missing key: {section}.{key}")
-            
-            # Initialize if all checks pass
             st.session_state.auth = {
                 'email': st.secrets.credentials.email,
-                'hashed_password': st.secrets.credentials.password,
-                'cookie_key': st.secrets.cookie.key,
-                'cookie_name': st.secrets.cookie.name,
-                'cookie_expiry_days': st.secrets.cookie.expiry_days,
-                'last_activity': datetime.now()
+                'hashed_password': st.secrets.credentials.password.strip(),  # Critical!
+                # ... other fields
             }
-            
         except Exception as e:
-            st.error(f"Authentication setup failed: {str(e)}")
+            st.error(f"Auth init failed: {str(e)}")
             st.stop()
 
 def check_authentication():
