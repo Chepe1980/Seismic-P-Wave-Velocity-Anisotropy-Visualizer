@@ -8,4 +8,5 @@ openpyxl
 bcrypt
 hashlib
 os
+pandas
 
