@@ -3,9 +3,6 @@ numpy
 matplotlib
 plotly
 scipy
-bokeh
-openpyxl
-bcrypt
 hashlib
 io
 pandas
