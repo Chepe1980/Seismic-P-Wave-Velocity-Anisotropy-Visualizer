@@ -325,7 +325,7 @@ def display_results(results, seismic_cmap, selected_angle):
             z=results['reflectivity_orig'],
             x=results['azimuths'],
             y=results['incidence_angles'],
-            colorscale='Viridis',
+            colorscale='jet',
             cmin=zmin,
             cmax=zmax
         )])
