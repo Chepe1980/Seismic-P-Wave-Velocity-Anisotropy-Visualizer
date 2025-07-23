@@ -17,4 +17,8 @@ scipy>=1.11.0
 pandas>=2.1.0
 bcrypt>=4.0.1
 openpyxl>=3.1.2
+io
+uuid
+platform
+subprocess
 
