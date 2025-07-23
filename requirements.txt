@@ -1,13 +1,13 @@
-#streamlit
-#numpy
-#matplotlib
-#plotly
-#scipy
-#bokeh
-#openpyxl
-#bcrypt
-#hashlib
-#os
+streamlit
+numpy
+matplotlib
+plotly
+scipy
+bokeh
+openpyxl
+bcrypt
+hashlib
+os
 
 streamlit>=1.32.0
 numpy>=1.26.0
