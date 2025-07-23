@@ -3,7 +3,6 @@ numpy
 matplotlib
 plotly
 scipy
-hashlib
 io
 pandas
 
