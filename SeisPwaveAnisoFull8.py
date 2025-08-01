@@ -82,7 +82,6 @@ def create_3d_plot(x, y, z, vp):
     return fig
 
 def pwave_anisotropy_section(epsilon, delta, vp0):
-    """Visualize P-wave velocity anisotropy based on Thomsen parameters"""
     st.header("P-Wave Velocity Anisotropy Visualizer")
     st.markdown("Explore how Thomsen parameters (ε, δ) affect P-wave velocity anisotropy.")
 
@@ -94,7 +93,7 @@ def pwave_anisotropy_section(epsilon, delta, vp0):
             "ε (Epsilon)", 
             min_value=-0.5, 
             max_value=0.5, 
-            value=epsilon, 
+            value=float(epsilon),  # Ensure float type
             step=0.01,
             key="epsilon_ani"
         )
@@ -102,15 +101,15 @@ def pwave_anisotropy_section(epsilon, delta, vp0):
             "δ (Delta)", 
             min_value=-0.5, 
             max_value=0.5, 
-            value=delta, 
+            value=float(delta),  # Ensure float type
             step=0.01,
             key="delta_ani"
         )
         vp0 = st.number_input(
             "Vp₀ (m/s)", 
-            min_value=1000, 
-            max_value=8000, 
-            value=vp0,
+            min_value=1000.0,  # Changed to float
+            max_value=8000.0,  # Changed to float
+            value=float(vp0),   # Ensure float type
             key="vp0_ani"
         )
         show_3d = st.checkbox("Show 3D Visualization", True, key="show3d_ani")
