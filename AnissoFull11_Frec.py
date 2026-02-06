@@ -1,647 +1,1100 @@
-"""
-AZIMUTH AND INCIDENCE DATA CONCATENATION
-Creates a single image from azimuth and incidence angle measurements
-"""
-
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
-from scipy import interpolate
-from PIL import Image
+import plotly.graph_objects as go
+import streamlit as st
+from scipy.signal import convolve
 import pandas as pd
-from mpl_toolkits.mplot3d import Axes3D
-import warnings
-warnings.filterwarnings('ignore')
+import io
 
-# ============================================================================
-# CORE DATA PROCESSING CLASS
-# ============================================================================
+# ==============================================
+# Core Functions (unchanged)
+# ==============================================
+def ricker_wavelet(freq, length, dt):
+    """Generate a Ricker wavelet for seismic modeling"""
+    t = np.arange(-length/2, length/2, dt)
+    return (1 - 2*(np.pi*freq*t)**2) * np.exp(-(np.pi*freq*t)**2)
 
-class AzimuthIncidenceConcatenator:
-    """
-    Main class for concatenating azimuth and incidence angle data into a single image.
-    """
-    
-    def __init__(self):
-        # Original data from your table
-        self.original_incidence = [0, 15, 30, 45]  # Adjust these based on your actual data
-        self.original_azimuth = np.linspace(0, 360, 11, endpoint=False)
-        self.original_data = None
-        self.processed_data = None
-        self.azimuth_full = None
-        self.incidence_full = None
-        
-    def load_original_data(self):
-        """
-        Load the data from your table format.
-        Returns the data matrix (11 azimuths × 4 incidence angles)
-        """
-        # Based on your table structure:
-        # Rows: Azimuth 1-11 (0° to 327.27°)
-        # Columns: 4 incidence angles (0°, 15°, 30°, 45° in this example)
-        
-        data_matrix = np.array([
-            # Format: [incidence_0°, incidence_15°, incidence_30°, incidence_45°]
-            [100, 100, 100, 100],  # Azimuth 1 (0°)
-            [100, 100, 100, 100],  # Azimuth 2 (32.73°)
-            [100, 100, 100, 100],  # Azimuth 3 (65.45°)
-            [100, 100, 102, 104],  # Azimuth 4 (98.18°)
-            [105, 105, 105, 105],  # Azimuth 5 (130.91°)
-            [105, 105, 105, 105],  # Azimuth 6 (163.64°)
-            [105, 105, 105, 105],  # Azimuth 7 (196.36°)
-            [105, 105, 105, 105],  # Azimuth 8 (229.09°)
-            [100, 102, 103, 104],  # Azimuth 9 (261.82°)
-            [100, 102, 103, 104],  # Azimuth 10 (294.55°)
-            [100, 102, 103, 104],  # Azimuth 11 (327.27°)
-        ])
-        
-        self.original_data = data_matrix
-        return data_matrix
-    
-    def interpolate_azimuth_360(self, n_azimuth_points=360):
-        """
-        Interpolate azimuth data from 11 points to full 360° coverage.
-        
-        Args:
-            n_azimuth_points: Number of azimuth points in output (default: 360)
-            
-        Returns:
-            Interpolated data matrix
-        """
-        if self.original_data is None:
-            self.load_original_data()
-        
-        n_incidence = self.original_data.shape[1]
-        interpolated_data = np.zeros((n_azimuth_points, n_incidence))
-        
-        # Convert to radians for circular interpolation
-        azimuth_rad = np.radians(self.original_azimuth)
-        azimuth_full_rad = np.radians(np.linspace(0, 360, n_azimuth_points, endpoint=False))
-        
-        for inc_idx in range(n_incidence):
-            # Get values for this incidence angle
-            values = self.original_data[:, inc_idx]
-            
-            # Create circular interpolation (wrap around 360°)
-            values_extended = np.concatenate([values, [values[0]]])
-            azimuth_extended = np.concatenate([azimuth_rad, [azimuth_rad[0] + 2 * np.pi]])
-            
-            # Create interpolation function
-            f = interpolate.interp1d(azimuth_extended, values_extended, 
-                                     kind='cubic', fill_value='extrapolate')
-            
-            # Interpolate to full resolution
-            interpolated_data[:, inc_idx] = f(azimuth_full_rad)
-        
-        self.azimuth_full = np.linspace(0, 360, n_azimuth_points, endpoint=False)
-        return interpolated_data
-    
-    def interpolate_incidence_50(self, n_incidence_points=50, max_incidence=50):
-        """
-        Interpolate incidence data to cover 0-50° range.
-        
-        Args:
-            n_incidence_points: Number of incidence points in output
-            max_incidence: Maximum incidence angle (default: 50°)
-            
-        Returns:
-            Tuple of (incidence_angles, interpolated_data)
-        """
-        # First interpolate azimuth to 360 points
-        data_azimuth_interp = self.interpolate_azimuth_360()
-        
-        n_azimuth = data_azimuth_interp.shape[0]
-        incidence_full = np.linspace(0, max_incidence, n_incidence_points)
-        interpolated_data = np.zeros((n_azimuth, n_incidence_points))
-        
-        for az_idx in range(n_azimuth):
-            # Get values for this azimuth position
-            values = data_azimuth_interp[az_idx, :]
-            
-            # Create interpolation function
-            f = interpolate.interp1d(self.original_incidence, values, 
-                                     kind='quadratic', fill_value='extrapolate',
-                                     bounds_error=False)
-            
-            # Interpolate to full resolution
-            interpolated_data[az_idx, :] = f(incidence_full)
-        
-        self.incidence_full = incidence_full
-        self.processed_data = interpolated_data
-        return incidence_full, interpolated_data
-    
-    def process_full_data(self):
-        """
-        Complete data processing pipeline.
-        Returns the fully interpolated data matrix.
-        """
-        print("Processing azimuth and incidence data...")
-        print(f"Original data shape: {self.original_data.shape}")
-        
-        # Process data
-        incidence_full, data_full = self.interpolate_incidence_50()
-        
-        print(f"Processed data shape: {data_full.shape}")
-        print(f"Azimuth range: 0-360° ({len(self.azimuth_full)} points)")
-        print(f"Incidence range: 0-50° ({len(incidence_full)} points)")
-        
-        return data_full
+def calculate_reflectivity(vp, vs, d, e, g, dlt, theta, azimuth):
+    """Calculate anisotropic reflectivity coefficients"""
+    VP2 = (vp[1] + vp[2])/2
+    VS2 = (vs[1] + vs[2])/2
+    DEN2 = (d[1] + d[2])/2
 
-# ============================================================================
-# VISUALIZATION FUNCTIONS
-# ============================================================================
-
-class DataVisualizer:
-    """
-    Class for creating various visualizations of the concatenated data.
-    """
+    A2 = -0.5 * ((vp[2]-vp[1])/VP2 + (d[2]-d[1])/DEN2)
     
-    @staticmethod
-    def create_polar_plot(azimuth_data, incidence_data, data_matrix, 
-                         title="Azimuth vs Incidence Angle (Polar View)",
-                         output_path="polar_visualization.png",
-                         figsize=(10, 8)):
-        """
-        Create polar coordinate visualization.
-        """
-        fig, ax = plt.subplots(figsize=figsize, subplot_kw={'projection': 'polar'})
-        
-        # Create custom colormap
-        cmap = LinearSegmentedColormap.from_list(
-            'radar_cmap', 
-            ['darkblue', 'blue', 'cyan', 'white', 'yellow', 'orange', 'red', 'darkred']
+    az_rad = np.radians(azimuth)
+    Biso2 = 0.5*((vp[2]-vp[1])/VP2) - 2*(VS2/VP2)**2*(d[2]-d[1])/DEN2 - 4*(VS2/VP2)**2*(vs[2]-vs[1])/VS2
+    Baniso2 = 0.5*((dlt[2]-dlt[1]) + 2*(2*VS2/VP2)**2*(g[2]-g[1]))
+    Caniso2 = 0.5*((vp[2]-vp[1])/VP2 - (e[2]-e[1])*np.cos(az_rad)**4 + (dlt[2]-dlt[1])*np.sin(az_rad)**2*np.cos(az_rad)**2)
+    
+    return A2 + (Biso2 + Baniso2*np.cos(az_rad)**2)*np.sin(theta)**2 + Caniso2*np.sin(theta)**2*np.tan(theta)**2
+
+def brown_korringa_substitution(Km, Gm, Ks, Gs, Kf, phi, delta, gamma):
+    """Brown-Korringa fluid substitution for anisotropic media"""
+    beta = 1 - (Ks/Km)
+    K_sat = Ks + (beta**2) / ((phi/Kf) + ((beta - phi)/Km) - (delta*Ks)/(3*Km))
+    G_sat = Gs * (1 - (gamma*Ks)/(3*Km))
+    
+    # Update anisotropy parameters
+    delta_sat = delta * (K_sat/Ks)
+    gamma_sat = gamma * (G_sat/Gs)
+    
+    return K_sat, G_sat, delta_sat, gamma_sat
+
+def moduli_to_velocity(K, G, density):
+    """Convert bulk and shear moduli to Vp and Vs"""
+    Vp = np.sqrt((K + 4/3*G)/density)
+    Vs = np.sqrt(G/density)
+    return Vp, Vs
+
+def velocity_to_moduli(Vp, Vs, density):
+    """Convert Vp and Vs to bulk and shear moduli"""
+    G = density * Vs**2
+    K = density * Vp**2 - (4/3)*G
+    return K, G
+
+def create_3d_plot(x, y, z, vp):
+    """Create interactive 3D velocity surface plot"""
+    fig = go.Figure(data=[
+        go.Surface(
+            x=x, y=y, z=z,
+            surfacecolor=vp,
+            colorscale='Viridis',
+            colorbar=dict(title='Velocity (m/s)'),
+            opacity=0.9,
+            hoverinfo='x+y+z+text',
+            text=[f'Vp: {val:.0f} m/s' for val in vp.flatten()]
         )
-        
-        # Convert to meshgrid for polar plot
-        theta = np.radians(azimuth_data)
-        r = np.array(incidence_data)
-        R, Theta = np.meshgrid(r, theta)
-        
-        # Create plot
-        img = ax.pcolormesh(Theta, R, data_matrix, cmap=cmap, shading='auto', 
-                           vmin=np.min(data_matrix), vmax=np.max(data_matrix))
-        
-        # Configure polar plot
-        ax.set_theta_zero_location('N')  # 0° at top
-        ax.set_theta_direction(-1)       # Clockwise
-        ax.set_ylim(0, 50)               # Incidence angle limit
-        
-        # Title and labels
-        ax.set_title(title, fontsize=14, pad=20)
-        
-        # Colorbar
-        cbar = plt.colorbar(img, ax=ax, pad=0.08, shrink=0.8)
-        cbar.set_label('Measurement Value', fontsize=12)
-        
-        # Grid
-        ax.grid(True, alpha=0.3, linestyle='--', color='white')
-        
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        plt.show()
-        
-        print(f"Polar plot saved to: {output_path}")
-        return fig
+    ])
     
-    @staticmethod
-    def create_rectangular_plot(azimuth_data, incidence_data, data_matrix,
-                               title="Concatenated Data: Azimuth (0-360°) vs Incidence (0-50°)",
-                               output_path="rectangular_visualization.png",
-                               figsize=(14, 6)):
-        """
-        Create rectangular (Cartesian) visualization.
-        """
-        fig, ax = plt.subplots(figsize=figsize)
-        
-        # Create custom colormap
-        cmap = LinearSegmentedColormap.from_list(
-            'data_cmap',
-            ['blue', 'cyan', 'lime', 'yellow', 'orange', 'red']
-        )
-        
-        # Display as image
-        img = ax.imshow(data_matrix.T, aspect='auto', cmap=cmap,
-                       extent=[0, 360, incidence_data[-1], incidence_data[0]],
-                       interpolation='bilinear',
-                       vmin=np.min(data_matrix), vmax=np.max(data_matrix))
-        
-        # Labels and title
-        ax.set_xlabel('Azimuth Angle (°)', fontsize=12)
-        ax.set_ylabel('Incidence Angle (°)', fontsize=12)
-        ax.set_title(title, fontsize=14, pad=15)
-        
-        # Set ticks
-        ax.set_xticks(np.arange(0, 361, 45))
-        ax.set_xticklabels([f'{i}°' for i in range(0, 361, 45)])
-        
-        # Add grid
-        ax.grid(True, alpha=0.2, linestyle='-', color='white')
-        
-        # Colorbar
-        cbar = plt.colorbar(img, ax=ax, fraction=0.023, pad=0.04)
-        cbar.set_label('Value', fontsize=12)
-        
-        plt.tight_layout()
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        plt.show()
-        
-        print(f"Rectangular plot saved to: {output_path}")
-        return fig
+    fig.update_layout(
+        title='3D Velocity Surface (Drag to rotate)',
+        scene=dict(
+            xaxis_title='X [m/s]',
+            yaxis_title='Y [m/s]',
+            zaxis_title='Z [m/s]',
+            aspectratio=dict(x=1, y=1, z=1),
+            camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+        ),
+        margin=dict(l=0, r=0, b=0, t=40),
+        height=700
+    )
+    return fig
+
+def morlet_wavelet(t, s=1.0, w=5.0):
+    """Morlet wavelet function"""
+    return np.pi**(-0.25) * np.exp(1j * w * t) * np.exp(-0.5 * t**2)
+
+def cwt_analysis(signal_data, scales):
+    """Perform Continuous Wavelet Transform on signal data"""
+    n_samples = len(signal_data)
+    n_scales = len(scales)
     
-    @staticmethod
-    def create_3d_surface_plot(azimuth_data, incidence_data, data_matrix,
-                              title="3D Surface Plot of Data",
-                              output_path="3d_surface_plot.png",
-                              figsize=(12, 8)):
-        """
-        Create 3D surface plot of the data.
-        """
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection='3d')
+    # Create empty array for CWT results
+    cwt_matrix = np.zeros((n_scales, n_samples))
+    
+    # Perform CWT for each scale
+    for i, scale in enumerate(scales):
+        # Ensure scale is at least 1
+        scale = max(1, scale)
+        
+        # Create wavelet with proper length
+        wavelet_length = min(10 * scale, n_samples)
+        if wavelet_length % 2 == 0:
+            wavelet_length += 1  # Make it odd for symmetry
+        
+        t = np.linspace(-scale*3, scale*3, wavelet_length)
+        wavelet = morlet_wavelet(t/scale)
+        wavelet = wavelet.real  # Take real part for analysis
+        
+        # Normalize wavelet
+        wavelet = wavelet / np.sqrt(np.sum(np.abs(wavelet)**2))
+        
+        # Convolution with signal (mode='same' returns same length)
+        conv_result = np.convolve(signal_data, wavelet, mode='same')
+        
+        # Ensure we have the right length
+        if len(conv_result) == n_samples:
+            cwt_matrix[i, :] = conv_result
+        else:
+            # Trim or pad to match expected length
+            if len(conv_result) > n_samples:
+                cwt_matrix[i, :] = conv_result[:n_samples]
+            else:
+                cwt_matrix[i, :n_samples] = conv_result
+    
+    return cwt_matrix  # Return magnitude
+
+def plot_horizontal_angles_seismic(results, seismic_cmap):
+    """Plot seismic gathers with incidence angles arranged horizontally"""
+    st.header("Seismic Gathers - Horizontal Angle Arrangement")
+    st.markdown("All incidence angles (0-50°) arranged horizontally, each showing azimuth 0-360°")
+    
+    # Get dimensions
+    n_angles = len(results['incidence_angles'])
+    time_samples = results['seismic_orig'][0].shape[0]
+    n_azimuths = results['seismic_orig'][0].shape[1]
+    
+    # Original Seismic - Horizontal arrangement
+    st.subheader("Original Seismic - Horizontal Angle Arrangement")
+    
+    # Create figure with subplots arranged horizontally
+    fig1, axes1 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    
+    # If only one angle, axes1 is not iterable
+    if n_angles == 1:
+        axes1 = [axes1]
+    
+    # Set global vmax for consistent color scaling
+    vmax_global = 0
+    for angle_idx in range(n_angles):
+        vmax_angle = np.abs(results['seismic_orig'][angle_idx]).max()
+        vmax_global = max(vmax_global, vmax_angle)
+    
+    # Plot each angle horizontally
+    for angle_idx in range(n_angles):
+        ax = axes1[angle_idx]
+        seismic_data = results['seismic_orig'][angle_idx]
+        
+        im = ax.imshow(seismic_data, aspect='auto',
+                      cmap=seismic_cmap,
+                      vmin=-vmax_global, vmax=vmax_global,
+                      extent=[0, 360, time_samples, 0])
+        
+        # Add angle label at the top
+        angle = results['incidence_angles'][angle_idx]
+        ax.set_title(f'{angle:.0f}°', fontsize=12, fontweight='bold')
+        
+        # Only add x-label for bottom row
+        ax.set_xlabel('Azimuth (deg)' if angle_idx == n_angles//2 else '')
+        
+        # Only add y-label for first column
+        if angle_idx == 0:
+            ax.set_ylabel('Time Samples')
+        else:
+            ax.set_yticklabels([])
+    
+    # Add colorbar
+    plt.colorbar(im, ax=axes1, location='bottom', pad=0.05, label='Amplitude')
+    plt.suptitle('Original Seismic - All Incidence Angles (0-50°)', fontsize=14, y=0.95)
+    plt.tight_layout()
+    st.pyplot(fig1)
+    
+    # Fluid-Substituted Seismic - Horizontal arrangement
+    st.subheader("Fluid-Substituted Seismic - Horizontal Angle Arrangement")
+    
+    # Create figure with subplots arranged horizontally
+    fig2, axes2 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    
+    # If only one angle, axes2 is not iterable
+    if n_angles == 1:
+        axes2 = [axes2]
+    
+    # Set global vmax for consistent color scaling
+    vmax_global_sub = 0
+    for angle_idx in range(n_angles):
+        vmax_angle = np.abs(results['seismic_sub'][angle_idx]).max()
+        vmax_global_sub = max(vmax_global_sub, vmax_angle)
+    
+    # Plot each angle horizontally
+    for angle_idx in range(n_angles):
+        ax = axes2[angle_idx]
+        seismic_data = results['seismic_sub'][angle_idx]
+        
+        im = ax.imshow(seismic_data, aspect='auto',
+                      cmap=seismic_cmap,
+                      vmin=-vmax_global_sub, vmax=vmax_global_sub,
+                      extent=[0, 360, time_samples, 0])
+        
+        # Add angle label at the top
+        angle = results['incidence_angles'][angle_idx]
+        ax.set_title(f'{angle:.0f}°', fontsize=12, fontweight='bold')
+        
+        # Only add x-label for bottom row
+        ax.set_xlabel('Azimuth (deg)' if angle_idx == n_angles//2 else '')
+        
+        # Only add y-label for first column
+        if angle_idx == 0:
+            ax.set_ylabel('Time Samples')
+        else:
+            ax.set_yticklabels([])
+    
+    # Add colorbar
+    plt.colorbar(im, ax=axes2, location='bottom', pad=0.05, label='Amplitude')
+    plt.suptitle('Fluid-Substituted Seismic - All Incidence Angles (0-50°)', fontsize=14, y=0.95)
+    plt.tight_layout()
+    st.pyplot(fig2)
+    
+    # Difference plots - Horizontal arrangement
+    st.subheader("Seismic Difference - Horizontal Angle Arrangement")
+    
+    # Create figure with subplots arranged horizontally
+    fig3, axes3 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    
+    # If only one angle, axes3 is not iterable
+    if n_angles == 1:
+        axes3 = [axes3]
+    
+    # Set global vmax for consistent color scaling
+    vmax_global_diff = 0
+    for angle_idx in range(n_angles):
+        diff_data = results['seismic_sub'][angle_idx] - results['seismic_orig'][angle_idx]
+        vmax_angle = np.abs(diff_data).max()
+        vmax_global_diff = max(vmax_global_diff, vmax_angle)
+    
+    # Plot each angle horizontally
+    for angle_idx in range(n_angles):
+        ax = axes3[angle_idx]
+        diff_data = results['seismic_sub'][angle_idx] - results['seismic_orig'][angle_idx]
+        
+        im = ax.imshow(diff_data, aspect='auto',
+                      cmap='RdBu',
+                      vmin=-vmax_global_diff, vmax=vmax_global_diff,
+                      extent=[0, 360, time_samples, 0])
+        
+        # Add angle label at the top
+        angle = results['incidence_angles'][angle_idx]
+        ax.set_title(f'{angle:.0f}°', fontsize=12, fontweight='bold')
+        
+        # Only add x-label for bottom row
+        ax.set_xlabel('Azimuth (deg)' if angle_idx == n_angles//2 else '')
+        
+        # Only add y-label for first column
+        if angle_idx == 0:
+            ax.set_ylabel('Time Samples')
+        else:
+            ax.set_yticklabels([])
+    
+    # Add colorbar
+    plt.colorbar(im, ax=axes3, location='bottom', pad=0.05, label='Amplitude Difference')
+    plt.suptitle('Seismic Difference (Fluid-Substituted - Original)', fontsize=14, y=0.95)
+    plt.tight_layout()
+    st.pyplot(fig3)
+
+def plot_concatenated_cwt(results):
+    """Plot concatenated CWT analysis for all incidence angles"""
+    st.header("Concatenated CWT Analysis")
+    st.markdown("CWT analysis showing all incidence angles concatenated (Azimuth vs Time)")
+    
+    # Define scales for CWT
+    scales = np.arange(1, 21, 2)
+    selected_scale_idx = len(scales) // 2
+    selected_scale = scales[selected_scale_idx]
+    
+    with st.spinner("Performing CWT analysis and creating concatenated plots..."):
+        # Get dimensions
+        n_angles = len(results['incidence_angles'])
+        time_samples = results['seismic_orig'][0].shape[0]
+        n_azimuths = results['seismic_orig'][0].shape[1]
+        
+        # Initialize concatenated arrays
+        concatenated_cwt_orig = np.zeros((time_samples * n_angles, n_azimuths))
+        concatenated_cwt_sub = np.zeros((time_samples * n_angles, n_azimuths))
+        
+        # Perform CWT for each angle and concatenate
+        for angle_idx in range(n_angles):
+            # Get seismic data for this angle
+            seismic_orig_angle = results['seismic_orig'][angle_idx]
+            seismic_sub_angle = results['seismic_sub'][angle_idx]
+            
+            # Initialize arrays for CWT results at selected scale
+            cwt_orig_at_scale = np.zeros_like(seismic_orig_angle)
+            cwt_sub_at_scale = np.zeros_like(seismic_sub_angle)
+            
+            # Perform CWT for each azimuth trace
+            for az_idx in range(n_azimuths):
+                # Original seismic trace
+                trace_orig = seismic_orig_angle[:, az_idx]
+                if len(trace_orig) > 0:
+                    cwt_result_orig = cwt_analysis(trace_orig, [selected_scale])
+                    cwt_orig_at_scale[:, az_idx] = cwt_result_orig[0, :]
+                
+                # Fluid-substituted seismic trace
+                trace_sub = seismic_sub_angle[:, az_idx]
+                if len(trace_sub) > 0:
+                    cwt_result_sub = cwt_analysis(trace_sub, [selected_scale])
+                    cwt_sub_at_scale[:, az_idx] = cwt_result_sub[0, :]
+            
+            # Add to concatenated arrays
+            start_row = angle_idx * time_samples
+            end_row = (angle_idx + 1) * time_samples
+            concatenated_cwt_orig[start_row:end_row, :] = cwt_orig_at_scale
+            concatenated_cwt_sub[start_row:end_row, :] = cwt_sub_at_scale
+        
+        # Display concatenated CWT plots
+        st.subheader(f"CWT at Scale {selected_scale} - All Angles Concatenated")
+        
+        # Create tabs for different views
+        cwt_tab1, cwt_tab2, cwt_tab3 = st.tabs(["Original CWT", "Fluid-Substituted CWT", "CWT Difference"])
+        
+        with cwt_tab1:
+            # Original CWT concatenated
+            fig1, ax1 = plt.subplots(figsize=(15, 8))
+            vmax_orig = np.max(np.abs(concatenated_cwt_orig))
+            im1 = ax1.imshow(concatenated_cwt_orig, aspect='auto',
+                           cmap='viridis',
+                           vmin=0, vmax=vmax_orig,
+                           extent=[0, 360, concatenated_cwt_orig.shape[0], 0])
+            
+            # Add horizontal lines to separate angles
+            for i in range(1, n_angles):
+                y_pos = i * time_samples
+                ax1.axhline(y=y_pos, color='white', linestyle='--', linewidth=1, alpha=0.7)
+            
+            # Add angle labels
+            for i, angle in enumerate(results['incidence_angles']):
+                y_pos = (i + 0.5) * time_samples
+                ax1.text(380, y_pos, f'{angle}°', ha='left', va='center', 
+                        color='white', fontsize=10, fontweight='bold')
+            
+            ax1.set_xlabel('Azimuth (degrees)')
+            ax1.set_ylabel('Time Samples (Concatenated Angles)')
+            ax1.set_title(f'Original CWT at Scale {selected_scale} - All Incidence Angles')
+            plt.colorbar(im1, ax=ax1, label='CWT Magnitude')
+            plt.tight_layout()
+            st.pyplot(fig1)
+        
+        with cwt_tab2:
+            # Fluid-substituted CWT concatenated
+            fig2, ax2 = plt.subplots(figsize=(15, 8))
+            vmax_sub = np.max(np.abs(concatenated_cwt_sub))
+            im2 = ax2.imshow(concatenated_cwt_sub, aspect='auto',
+                           cmap='viridis',
+                           vmin=0, vmax=vmax_sub,
+                           extent=[0, 360, concatenated_cwt_sub.shape[0], 0])
+            
+            # Add horizontal lines to separate angles
+            for i in range(1, n_angles):
+                y_pos = i * time_samples
+                ax2.axhline(y=y_pos, color='white', linestyle='--', linewidth=1, alpha=0.7)
+            
+            # Add angle labels
+            for i, angle in enumerate(results['incidence_angles']):
+                y_pos = (i + 0.5) * time_samples
+                ax2.text(380, y_pos, f'{angle}°', ha='left', va='center', 
+                        color='white', fontsize=10, fontweight='bold')
+            
+            ax2.set_xlabel('Azimuth (degrees)')
+            ax2.set_ylabel('Time Samples (Concatenated Angles)')
+            ax2.set_title(f'Fluid-Substituted CWT at Scale {selected_scale} - All Incidence Angles')
+            plt.colorbar(im2, ax=ax2, label='CWT Magnitude')
+            plt.tight_layout()
+            st.pyplot(fig2)
+        
+        with cwt_tab3:
+            # CWT Difference concatenated
+            concatenated_cwt_diff = concatenated_cwt_sub - concatenated_cwt_orig
+            vmax_diff = np.max(np.abs(concatenated_cwt_diff))
+            
+            fig3, ax3 = plt.subplots(figsize=(15, 8))
+            im3 = ax3.imshow(concatenated_cwt_diff, aspect='auto',
+                           cmap='RdBu',
+                           vmin=-vmax_diff, vmax=vmax_diff,
+                           extent=[0, 360, concatenated_cwt_diff.shape[0], 0])
+            
+            # Add horizontal lines to separate angles
+            for i in range(1, n_angles):
+                y_pos = i * time_samples
+                ax3.axhline(y=y_pos, color='black', linestyle='--', linewidth=1, alpha=0.7)
+            
+            # Add angle labels
+            for i, angle in enumerate(results['incidence_angles']):
+                y_pos = (i + 0.5) * time_samples
+                ax3.text(380, y_pos, f'{angle}°', ha='left', va='center', 
+                        color='black', fontsize=10, fontweight='bold')
+            
+            ax3.set_xlabel('Azimuth (degrees)')
+            ax3.set_ylabel('Time Samples (Concatenated Angles)')
+            ax3.set_title(f'CWT Difference at Scale {selected_scale} - All Incidence Angles')
+            plt.colorbar(im3, ax=ax3, label='CWT Magnitude Difference')
+            plt.tight_layout()
+            st.pyplot(fig3)
+        
+        # 3D Visualization of concatenated CWT
+        st.subheader("3D Visualization of Concatenated CWT")
+        
+        # Create 3D plot for original CWT
+        fig4 = go.Figure()
+        
+        # We'll show a subset for better visualization
+        subset_rows = min(200, concatenated_cwt_orig.shape[0])
+        subset_cols = min(100, concatenated_cwt_orig.shape[1])
+        
+        cwt_orig_subset = concatenated_cwt_orig[:subset_rows, :subset_cols]
         
         # Create meshgrid
-        X, Y = np.meshgrid(azimuth_data, incidence_data)
+        X, Y = np.meshgrid(np.linspace(0, 360, subset_cols), 
+                          np.linspace(0, concatenated_cwt_orig.shape[0], subset_rows))
         
-        # Plot surface
-        surf = ax.plot_surface(X, Y, data_matrix.T, cmap='viridis',
-                              alpha=0.8, linewidth=0.5, antialiased=True)
+        fig4.add_trace(go.Surface(
+            z=cwt_orig_subset,
+            x=X,
+            y=Y,
+            colorscale='Viridis',
+            name='Original CWT'
+        ))
         
-        # Labels
-        ax.set_xlabel('Azimuth Angle (°)', fontsize=11, labelpad=10)
-        ax.set_ylabel('Incidence Angle (°)', fontsize=11, labelpad=10)
-        ax.set_zlabel('Value', fontsize=11, labelpad=10)
-        ax.set_title(title, fontsize=14, pad=20)
+        fig4.update_layout(
+            scene=dict(
+                xaxis_title='Azimuth (deg)',
+                yaxis_title='Time Samples',
+                zaxis_title='CWT Magnitude',
+                camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+            ),
+            title=f"3D Concatenated CWT at Scale {selected_scale}",
+            height=600
+        )
+        st.plotly_chart(fig4, use_container_width=True)
         
-        # Colorbar
-        fig.colorbar(surf, ax=ax, shrink=0.5, aspect=5, pad=0.1)
+        # Frequency-Scale Analysis
+        st.subheader("Frequency-Scale Analysis")
         
-        # Set viewing angle
-        ax.view_init(elev=30, azim=45)
+        # Analyze at middle azimuth
+        mid_azimuth_idx = n_azimuths // 2
+        mid_angle_idx = n_angles // 2
+        mid_angle = results['incidence_angles'][mid_angle_idx]
+        
+        # Get traces for analysis
+        orig_trace = results['seismic_orig'][mid_angle_idx][:, mid_azimuth_idx]
+        sub_trace = results['seismic_sub'][mid_angle_idx][:, mid_azimuth_idx]
+        
+        # Perform full CWT with all scales
+        scales_full = np.arange(1, 21, 1)
+        cwt_orig_full = cwt_analysis(orig_trace, scales_full)
+        cwt_sub_full = cwt_analysis(sub_trace, scales_full)
+        
+        # Plot scale-time analysis
+        fig5, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Original CWT scale-time
+        im1 = ax1.imshow(cwt_orig_full, aspect='auto', 
+                        extent=[0, len(orig_trace), scales_full[-1], scales_full[0]],
+                        cmap='viridis')
+        ax1.set_xlabel('Time Sample')
+        ax1.set_ylabel('Scale (Lower = Higher Frequency)')
+        ax1.set_title(f'Original: CWT Scale-Time at {mid_angle}°')
+        plt.colorbar(im1, ax=ax1, label='CWT Magnitude')
+        
+        # Fluid-substituted CWT scale-time
+        im2 = ax2.imshow(cwt_sub_full, aspect='auto', 
+                        extent=[0, len(sub_trace), scales_full[-1], scales_full[0]],
+                        cmap='viridis')
+        ax2.set_xlabel('Time Sample')
+        ax2.set_ylabel('Scale (Lower = Higher Frequency)')
+        ax2.set_title(f'Fluid-Substituted: CWT Scale-Time at {mid_angle}°')
+        plt.colorbar(im2, ax=ax2, label='CWT Magnitude')
         
         plt.tight_layout()
-        plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        plt.show()
-        
-        print(f"3D surface plot saved to: {output_path}")
-        return fig
+        st.pyplot(fig5)
 
-# ============================================================================
-# IMAGE PROCESSING FUNCTIONS
-# ============================================================================
+def pwave_anisotropy_section(epsilon, delta, vp0):
+    st.header("P-Wave Velocity Anisotropy Visualizer")
+    st.markdown("Explore how Thomsen parameters (ε, δ) affect P-wave velocity anisotropy.")
 
-class ImageGenerator:
-    """
-    Class for generating image files from the data.
-    """
+    col1, col2 = st.columns([1, 3])
     
-    @staticmethod
-    def create_grayscale_image(data_matrix, output_path="concatenated_image_grayscale.png",
-                              scale_factor=10):
-        """
-        Create a grayscale image from the data matrix.
-        
-        Args:
-            data_matrix: 2D numpy array with data values
-            output_path: Path to save the image
-            scale_factor: Factor to scale the image for better visibility
-            
-        Returns:
-            PIL Image object
-        """
-        # Normalize data to 0-255
-        data_min = np.min(data_matrix)
-        data_max = np.max(data_matrix)
-        
-        if data_max > data_min:
-            normalized_data = ((data_matrix - data_min) / (data_max - data_min) * 255)
-        else:
-            normalized_data = np.full_like(data_matrix, 128)
-        
-        # Convert to uint8
-        normalized_data = normalized_data.astype(np.uint8)
-        
-        # Create image (transpose to have incidence as rows)
-        img_array = normalized_data.T
-        
-        # Create PIL Image
-        img_pil = Image.fromarray(img_array, mode='L')
-        
-        # Scale up for better visibility
-        original_width, original_height = img_pil.size
-        new_width = original_width * scale_factor
-        new_height = original_height * scale_factor
-        
-        img_pil = img_pil.resize((new_width, new_height), Image.NEAREST)
-        
-        # Save image
-        img_pil.save(output_path)
-        
-        print(f"Grayscale image saved to: {output_path}")
-        print(f"Original size: {original_width} × {original_height}")
-        print(f"Scaled size: {new_width} × {new_height}")
-        
-        return img_pil
-    
-    @staticmethod
-    def create_color_image(data_matrix, output_path="concatenated_image_color.png",
-                          scale_factor=10, colormap='viridis'):
-        """
-        Create a color image from the data matrix.
-        
-        Args:
-            data_matrix: 2D numpy array with data values
-            output_path: Path to save the image
-            scale_factor: Factor to scale the image
-            colormap: Matplotlib colormap name
-            
-        Returns:
-            PIL Image object
-        """
-        # Normalize data to 0-1
-        data_min = np.min(data_matrix)
-        data_max = np.max(data_matrix)
-        
-        if data_max > data_min:
-            normalized_data = (data_matrix - data_min) / (data_max - data_min)
-        else:
-            normalized_data = np.full_like(data_matrix, 0.5)
-        
-        # Apply colormap
-        cmap = plt.cm.get_cmap(colormap)
-        colored_data = cmap(normalized_data)
-        
-        # Convert to uint8 (0-255)
-        colored_data = (colored_data[:, :, :3] * 255).astype(np.uint8)
-        
-        # Create image (transpose to have incidence as rows)
-        img_array = colored_data.transpose(1, 0, 2)
-        
-        # Create PIL Image
-        img_pil = Image.fromarray(img_array, mode='RGB')
-        
-        # Scale up
-        original_width, original_height = img_pil.size
-        new_width = original_width * scale_factor
-        new_height = original_height * scale_factor
-        
-        img_pil = img_pil.resize((new_width, new_height), Image.NEAREST)
-        
-        # Save image
-        img_pil.save(output_path)
-        
-        print(f"Color image saved to: {output_path}")
-        print(f"Colormap used: {colormap}")
-        
-        return img_pil
+    with col1:
+        st.subheader("Parameters")
+        epsilon = st.number_input(
+            "ε (Epsilon)", 
+            min_value=-0.5, 
+            max_value=0.5, 
+            value=float(epsilon),
+            step=0.01,
+            key="epsilon_ani"
+        )
+        delta = st.number_input(
+            "δ (Delta)", 
+            min_value=-0.5, 
+            max_value=0.5, 
+            value=float(delta),
+            step=0.01,
+            key="delta_ani"
+        )
+        vp0 = st.number_input(
+            "Vp₀ (m/s)", 
+            min_value=1000.0,
+            max_value=8000.0,
+            value=float(vp0),
+            key="vp0_ani"
+        )
+        show_3d = st.checkbox("Show 3D Visualization", True, key="show3d_ani")
 
-# ============================================================================
-# UTILITY FUNCTIONS
-# ============================================================================
+    with col2:
+        # Calculate Vp for 2D plot
+        theta = np.linspace(0, 90, 90) * np.pi / 180
+        Vp = vp0 * (1 + delta * (np.sin(theta))**2 * (np.cos(theta))**2 + epsilon * (np.sin(theta))**4)
+        
+        # Convert to Cartesian coordinates for 2D plot
+        Vpx = Vp * np.sin(theta)
+        Vpy = Vp * np.cos(theta)
+        
+        # 2D polar plot
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.plot(Vpx, Vpy, 'b-', linewidth=2, label=f"ε={epsilon:.3f}, δ={delta:.3f}")
+        ax.set_xlabel('Vpx [m/s]', fontsize=12)
+        ax.set_ylabel('Vpy [m/s]', fontsize=12)
+        ax.set_title("P-Wave Velocity Anisotropy", fontsize=14)
+        ax.axis('square')
+        ax.set_xlim(0, 1.5*vp0)
+        ax.set_ylim(0, 1.5*vp0)
+        ax.grid(True, linestyle='--', alpha=0.7)
+        ax.legend()
+        st.pyplot(fig)
+        
+        # 3D plot if enabled
+        if show_3d:
+            st.subheader("3D Velocity Surface")
+            # Calculate full 3D velocity field
+            theta_3d = np.linspace(0, np.pi, 90)
+            phi_3d = np.linspace(0, 2*np.pi, 90)
+            theta_grid, phi_grid = np.meshgrid(theta_3d, phi_3d)
+            
+            Vp_3d = vp0 * (1 + delta * (np.sin(theta_grid))**2 * (np.cos(theta_grid))**2 
+                          + epsilon * (np.sin(theta_grid))**4)
+            
+            # Convert to Cartesian coordinates
+            x = Vp_3d * np.sin(theta_grid) * np.cos(phi_grid)
+            y = Vp_3d * np.sin(theta_grid) * np.sin(phi_grid)
+            z = Vp_3d * np.cos(theta_grid)
+            
+            fig_3d = create_3d_plot(x, y, z, Vp_3d)
+            st.plotly_chart(fig_3d, use_container_width=True)
 
-class DataExporter:
-    """
-    Class for exporting data in various formats.
-    """
+def process_excel_data(uploaded_file, depth_ranges):
+    """Process uploaded Excel file with individual layer depth ranges"""
+    try:
+        df = pd.read_excel(uploaded_file, engine='openpyxl')
+        
+        # Ensure required columns exist
+        required_cols = ['Depth', 'Vp', 'Vs', 'Density', 'Epsilon', 'Delta', 'Gamma']
+        for col in required_cols:
+            if col not in df.columns:
+                st.error(f"Excel file must contain '{col}' column")
+                return None
+        
+        # Get values for each layer based on individual depth ranges
+        params = {}
+        for i, (min_depth, max_depth) in enumerate(depth_ranges, 1):
+            layer_df = df[(df['Depth'] >= min_depth) & (df['Depth'] <= max_depth)]
+            if len(layer_df) == 0:
+                st.error(f"No data found in Layer {i} depth range ({min_depth}-{max_depth})")
+                return None
+            
+            # Take median values for the layer
+            params[f'vp{i}'] = float(layer_df['Vp'].median())
+            params[f'vs{i}'] = float(layer_df['Vs'].median())
+            params[f'd{i}'] = float(layer_df['Density'].median())
+            params[f'e{i}'] = float(layer_df['Epsilon'].median())
+            params[f'g{i}'] = float(layer_df['Gamma'].median())
+            params[f'dlt{i}'] = float(layer_df['Delta'].median())
+        
+        return params
     
-    @staticmethod
-    def export_to_csv(azimuth_data, incidence_data, data_matrix, 
-                     output_path="concatenated_data.csv"):
-        """
-        Export data to CSV file.
-        """
-        # Create DataFrame
-        df = pd.DataFrame(data_matrix.T, 
-                         index=[f"Inc_{inc:.1f}°" for inc in incidence_data],
-                         columns=[f"Az_{az:.1f}°" for az in azimuth_data])
-        
-        # Add summary statistics
-        df['Mean'] = df.mean(axis=1)
-        df['Std'] = df.std(axis=1)
-        df['Min'] = df.min(axis=1)
-        df['Max'] = df.max(axis=1)
-        
-        # Save to CSV
-        df.to_csv(output_path)
-        
-        print(f"Data exported to CSV: {output_path}")
-        print(f"Data shape: {df.shape}")
-        
-        return df
-    
-    @staticmethod
-    def export_to_numpy(azimuth_data, incidence_data, data_matrix,
-                       output_path="concatenated_data.npz"):
-        """
-        Export data to NumPy compressed format.
-        """
-        np.savez_compressed(output_path,
-                           azimuth_data=azimuth_data,
-                           incidence_data=incidence_data,
-                           data_matrix=data_matrix,
-                           metadata={
-                               'description': 'Concatenated azimuth and incidence data',
-                               'azimuth_range': f"0-360° ({len(azimuth_data)} points)",
-                               'incidence_range': f"0-{incidence_data[-1]:.1f}° ({len(incidence_data)} points)",
-                               'data_shape': data_matrix.shape
-                           })
-        
-        print(f"Data exported to NumPy format: {output_path}")
-        
-    @staticmethod
-    def create_statistics_report(data_matrix, output_path="data_statistics.txt"):
-        """
-        Create a text report with data statistics.
-        """
-        with open(output_path, 'w') as f:
-            f.write("=" * 60 + "\n")
-            f.write("DATA STATISTICS REPORT\n")
-            f.write("=" * 60 + "\n\n")
-            
-            f.write(f"Data Shape: {data_matrix.shape}\n")
-            f.write(f"Total Data Points: {data_matrix.size}\n\n")
-            
-            f.write("Overall Statistics:\n")
-            f.write(f"  Minimum Value: {np.min(data_matrix):.2f}\n")
-            f.write(f"  Maximum Value: {np.max(data_matrix):.2f}\n")
-            f.write(f"  Mean Value: {np.mean(data_matrix):.2f}\n")
-            f.write(f"  Standard Deviation: {np.std(data_matrix):.2f}\n")
-            f.write(f"  Median Value: {np.median(data_matrix):.2f}\n\n")
-            
-            f.write("Value Distribution:\n")
-            percentiles = [0, 25, 50, 75, 100]
-            for p in percentiles:
-                f.write(f"  {p}th Percentile: {np.percentile(data_matrix, p):.2f}\n")
-            
-            f.write("\n" + "=" * 60 + "\n")
-        
-        print(f"Statistics report saved to: {output_path}")
+    except Exception as e:
+        st.error(f"Error processing Excel file: {str(e)}")
+        return None
 
-# ============================================================================
-# MAIN EXECUTION FUNCTION
-# ============================================================================
+def plot_depth_ranges(depth_ranges, min_depth, max_depth):
+    """Visualize the selected depth ranges"""
+    fig, ax = plt.subplots(figsize=(10, 3))
+    
+    # Create a horizontal bar for each layer
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c']  # Blue, Orange, Green
+    labels = ['Upper Layer (1)', 'Target Layer (2)', 'Lower Layer (3)']
+    
+    for i, ((min_d, max_d), color) in enumerate(zip(depth_ranges, colors)):
+        ax.barh(i, max_d-min_d, left=min_d, height=0.6, color=color, label=labels[i])
+        ax.text((min_d + max_d)/2, i, f'{min_d:.1f}-{max_d:.1f}', 
+                ha='center', va='center', color='white', fontweight='bold')
+    
+    ax.set_xlim(min_depth, max_depth)
+    ax.set_yticks([])
+    ax.set_xlabel('Depth (m)')
+    ax.set_title('Selected Depth Ranges')
+    ax.legend(loc='upper right', bbox_to_anchor=(1, 1.3))
+    ax.grid(True, linestyle='--', alpha=0.7)
+    
+    st.pyplot(fig)
+
+def run_modeling(params, enable_fluid_sub, seismic_cmap, selected_angle, azimuth_step, freq):
+    """Run the modeling for ALL angles (0-50°) and azimuths (0-360°)"""
+    with st.spinner("Computing models..."):
+        # Original properties
+        vp_orig = [params['vp1'], params['vp2'], params['vp3']]
+        vs_orig = [params['vs1'], params['vs2'], params['vs3']]
+        d_orig = [params['d1'], params['d2'], params['d3']]
+        e_orig = [params['e1'], params['e2'], params['e3']]
+        g_orig = [params['g1'], params['g2'], params['g3']]
+        dlt_orig = [params['dlt1'], params['dlt2'], params['dlt3']]
+        
+        # Fluid substituted properties
+        vp_sub = vp_orig.copy()
+        vs_sub = vs_orig.copy()
+        d_sub = d_orig.copy()
+        e_sub = e_orig.copy()
+        g_sub = g_orig.copy()
+        dlt_sub = dlt_orig.copy()
+        
+        if enable_fluid_sub:
+            K_orig, G_orig = velocity_to_moduli(params['vp2'], params['vs2'], params['d2'])
+            K_sat, G_sat, delta_sat, gamma_sat = brown_korringa_substitution(
+                params['Km']*1e9, params['Gm']*1e9, 
+                K_orig, G_orig,
+                params['Kf']*1e9, 
+                params['phi'], 
+                params['dlt2'], params['g2']
+            )
+            new_density = params['d2'] + params['phi']*(params['new_fluid_density'] - 1.0)
+            Vp_new, Vs_new = moduli_to_velocity(K_sat, G_sat, new_density)
+            
+            vp_sub[1] = Vp_new
+            vs_sub[1] = Vs_new
+            d_sub[1] = new_density
+            dlt_sub[1] = delta_sat
+            g_sub[1] = gamma_sat
+        
+        # Compute for ALL angles (0-50°) and azimuths (0-360°)
+        incidence_angles = np.linspace(0, 50, 11)  # 11 steps from 0-50°
+        azimuths = np.arange(0, 361, azimuth_step)
+        
+        # Compute reflectivity (2D array: angles × azimuths)
+        reflectivity_orig = np.zeros((len(incidence_angles), len(azimuths)))
+        reflectivity_sub = np.zeros((len(incidence_angles), len(azimuths)))
+        
+        for i, theta in enumerate(incidence_angles):
+            theta_rad = np.radians(theta)
+            for j, az in enumerate(azimuths):
+                reflectivity_orig[i,j] = calculate_reflectivity(
+                    vp_orig, vs_orig, d_orig, e_orig, g_orig, dlt_orig, theta_rad, az
+                )
+                reflectivity_sub[i,j] = calculate_reflectivity(
+                    vp_sub, vs_sub, d_sub, e_sub, g_sub, dlt_sub, theta_rad, az
+                )
+        
+        # Generate synthetic seismic for all angles
+        n_samples = 150
+        wavelet = ricker_wavelet(freq, 0.08, 0.001)
+        center_sample = n_samples//2 + len(wavelet)//2
+        
+        seismic_orig = []
+        seismic_sub = []
+        
+        for i in range(len(incidence_angles)):
+            R = np.zeros((n_samples, len(azimuths)))
+            R[n_samples//2, :] = reflectivity_orig[i,:]
+            seismic = np.array([convolve(R[:,az], wavelet, mode='full') for az in range(len(azimuths))]).T
+            seismic_orig.append(seismic[center_sample-75:center_sample+75, :])
+            
+            R = np.zeros((n_samples, len(azimuths)))
+            R[n_samples//2, :] = reflectivity_sub[i,:]
+            seismic = np.array([convolve(R[:,az], wavelet, mode='full') for az in range(len(azimuths))]).T
+            seismic_sub.append(seismic[center_sample-75:center_sample+75, :])
+        
+        return {
+            'reflectivity_orig': reflectivity_orig,
+            'reflectivity_sub': reflectivity_sub,
+            'seismic_orig': seismic_orig,
+            'seismic_sub': seismic_sub,
+            'incidence_angles': incidence_angles,
+            'azimuths': azimuths,
+            'vp_orig': vp_orig,
+            'vp_sub': vp_sub,
+            'vs_orig': vs_orig,
+            'vs_sub': vs_sub,
+            'd_orig': d_orig,
+            'd_sub': d_sub,
+            'e_orig': e_orig,
+            'e_sub': e_sub,
+            'g_orig': g_orig,
+            'g_sub': g_sub,
+            'dlt_orig': dlt_orig,
+            'dlt_sub': dlt_sub
+        }
+
+def display_results(results, seismic_cmap, selected_angle):
+    """Display modeling results with 0-50° 3D AVAZ comparison"""
+    # Find nearest angle index within 0-50° range
+    angle_idx = np.argmin(np.abs(results['incidence_angles'] - min(selected_angle, 50)))
+    actual_angle = results['incidence_angles'][angle_idx]
+    
+    st.header("3D AVAZ Response Comparison (0-50° Incidence)")
+    col1, col2 = st.columns(2)
+    
+    # Get min/max for consistent color scaling
+    zmin = min(np.min(results['reflectivity_orig']), np.min(results['reflectivity_sub']))
+    zmax = max(np.max(results['reflectivity_orig']), np.max(results['reflectivity_sub']))
+    
+    with col1:
+        fig_orig = go.Figure(data=[go.Surface(
+            z=results['reflectivity_orig'],
+            x=results['azimuths'],
+            y=results['incidence_angles'],
+            colorscale='jet',
+            cmin=zmin,
+            cmax=zmax
+        )])
+        fig_orig.update_layout(
+            scene=dict(
+                xaxis_title='Azimuth (deg)',
+                yaxis_title='Incidence Angle (deg)',
+                zaxis_title='Reflectivity',
+                camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+            ),
+            title="Original Response (0-50°)",
+            height=500
+        )
+        st.plotly_chart(fig_orig, use_container_width=True)
+    
+    with col2:
+        fig_sub = go.Figure(data=[go.Surface(
+            z=results['reflectivity_sub'],
+            x=results['azimuths'],
+            y=results['incidence_angles'],
+            colorscale='Jet',
+            cmin=zmin,
+            cmax=zmax
+        )])
+        fig_sub.update_layout(
+            scene=dict(
+                xaxis_title='Azimuth (deg)',
+                yaxis_title='Incidence Angle (deg)',
+                zaxis_title='Reflectivity',
+                camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+            ),
+            title="Fluid-Substituted Response (0-50°)",
+            height=500
+        )
+        st.plotly_chart(fig_sub, use_container_width=True)
+    
+    # 2. 2D Comparison at nearest angle
+    st.header(f"2D Comparison at {actual_angle:.1f}° Incidence (Closest to Selected {selected_angle}°)")
+    
+    fig1, ax1 = plt.subplots(figsize=(10, 6))
+    ax1.plot(results['azimuths'], results['reflectivity_orig'][angle_idx, :], 'b-', label='Original')
+    ax1.plot(results['azimuths'], results['reflectivity_sub'][angle_idx, :], 'r--', label='Fluid-Substituted')
+    ax1.set_xlabel('Azimuth (degrees)')
+    ax1.set_ylabel('Reflectivity')
+    ax1.set_title(f'AVAZ Reflectivity at {actual_angle:.1f}° Incidence')
+    ax1.grid(True)
+    ax1.legend()
+    st.pyplot(fig1)
+    
+    # 3. Polar View Comparison
+    st.header(f"Polar View Comparison at {actual_angle:.1f}° Incidence")
+    
+    fig2, ax2 = plt.subplots(figsize=(8, 8), subplot_kw={'projection': 'polar'})
+    theta_rad = np.radians(results['azimuths'])
+    ax2.plot(theta_rad, results['reflectivity_orig'][angle_idx, :], 'b-', label='Original')
+    ax2.plot(theta_rad, results['reflectivity_sub'][angle_idx, :], 'r--', label='Fluid-Substituted')
+    ax2.set_title(f'Polar AVAZ Response at {actual_angle:.1f}° Incidence', pad=20)
+    ax2.legend()
+    st.pyplot(fig2)
+    
+    # 4. Horizontal Arrangement of Seismic Gathers (NEW)
+    plot_horizontal_angles_seismic(results, seismic_cmap)
+    
+    # 5. Concatenated CWT Analysis
+    plot_concatenated_cwt(results)
+    
+    # 6. Difference Analysis
+    st.header("Difference Analysis")
+    
+    reflectivity_diff = results['reflectivity_sub'] - results['reflectivity_orig']
+    max_diff = np.max(np.abs(reflectivity_diff))
+    
+    # Difference matrix
+    fig5, ax5 = plt.subplots(figsize=(12, 6))
+    im = ax5.imshow(reflectivity_diff.T, aspect='auto', 
+                  extent=[0, results['incidence_angles'][-1], 0, 360],
+                  cmap='RdBu', vmin=-max_diff, vmax=max_diff,
+                  origin='lower')
+    ax5.set(xlabel='Incidence Angle (degrees)', 
+           ylabel='Azimuth (degrees)',
+           title='Reflectivity Difference (Fluid-Substituted - Original)')
+    plt.colorbar(im, ax=ax5, label='Reflectivity Difference')
+    st.pyplot(fig5)
+    
+    # 3D Difference plot
+    fig6 = go.Figure(data=[go.Surface(
+        z=reflectivity_diff,
+        x=results['azimuths'],
+        y=results['incidence_angles'],
+        colorscale='RdBu',
+        cmin=-max_diff,
+        cmax=max_diff
+    )])
+    fig6.update_layout(
+        scene=dict(
+            xaxis_title='Azimuth (deg)',
+            yaxis_title='Incidence Angle (deg)',
+            zaxis_title='Reflectivity Difference',
+            camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+        ),
+        title="3D Reflectivity Difference",
+        height=600
+    )
+    st.plotly_chart(fig6, use_container_width=True)
 
 def main():
-    """
-    Main function to execute the entire concatenation process.
-    """
-    print("=" * 70)
-    print("AZIMUTH AND INCIDENCE DATA CONCATENATION SYSTEM")
-    print("=" * 70)
-    print()
+    st.set_page_config(layout="wide", page_title="AVAZ Modeling with Fluid Substitution")
+    st.title("AVAZ Modeling with Brown-Korringa Fluid Substitution")
     
-    # Step 1: Initialize and process data
-    print("STEP 1: DATA PROCESSING")
-    print("-" * 40)
+    # Initialize session state
+    if 'modeling_mode' not in st.session_state:
+        st.session_state.modeling_mode = "manual"
+    if 'excel_data_processed' not in st.session_state:
+        st.session_state.excel_data_processed = False
+    if 'show_results' not in st.session_state:
+        st.session_state.show_results = False
     
-    processor = AzimuthIncidenceConcatenator()
-    processor.load_original_data()
-    data_full = processor.process_full_data()
-    
-    print(f"✓ Data processing complete")
-    print()
-    
-    # Step 2: Create visualizations
-    print("STEP 2: CREATING VISUALIZATIONS")
-    print("-" * 40)
-    
-    visualizer = DataVisualizer()
-    
-    # Create polar plot
-    polar_fig = visualizer.create_polar_plot(
-        processor.azimuth_full, 
-        processor.incidence_full, 
-        data_full,
-        title="Azimuth vs Incidence Data Distribution",
-        output_path="output/azimuth_polar.png"
+    # Modeling mode selection
+    modeling_mode = st.sidebar.radio(
+        "Modeling Mode",
+        ["Manual Input", "Excel Import"],
+        index=0 if st.session_state.modeling_mode == "manual" else 1
     )
-    print(f"✓ Polar plot created")
     
-    # Create rectangular plot
-    rect_fig = visualizer.create_rectangular_plot(
-        processor.azimuth_full,
-        processor.incidence_full,
-        data_full,
-        title="Concatenated Azimuth and Incidence Data",
-        output_path="output/azimuth_rectangular.png"
-    )
-    print(f"✓ Rectangular plot created")
+    if modeling_mode == "Manual Input":
+        st.session_state.modeling_mode = "manual"
+        st.session_state.excel_data_processed = False
+        st.session_state.show_results = False
+        
+        with st.sidebar:
+            st.header("Model Parameters")
+            
+            # Rock properties for three layers
+            layers = ["Upper (1)", "Target (2)", "Lower (3)"]
+            params = {}
+            
+            for i, layer in enumerate(layers, 1):
+                st.subheader(f"Layer {layer}")
+                params[f'vp{i}'] = st.number_input(f"Vp{i} (m/s)", value=5500 if i!=2 else 4742)
+                params[f'vs{i}'] = st.number_input(f"Vs{i} (m/s)", value=3600 if i!=2 else 3292)
+                params[f'd{i}'] = st.number_input(f"Density{i} (g/cc)", value=2.6 if i!=2 else 2.4, step=0.1)
+                params[f'e{i}'] = st.number_input(f"ε{i}", value=0.1 if i==1 else (-0.01 if i==2 else 0.2), step=0.01)
+                params[f'g{i}'] = st.number_input(f"γ{i}", value=0.05 if i==1 else (-0.05 if i==2 else 0.15), step=0.01)
+                params[f'dlt{i}'] = st.number_input(f"δ{i}", value=0.0 if i==1 else (-0.13 if i==2 else 0.1), step=0.01)
+            
+            st.subheader("Acquisition Parameters")
+            selected_angle = st.slider(
+                "Angle of Incidence (deg)", 
+                1, 70, 30, 1,
+                help="Model will show results for this angle in 2D views"
+            )
+            freq = st.slider("Wavelet Frequency (Hz)", 10, 100, 45)
+            azimuth_step = st.slider("Azimuth Step (deg)", 1, 30, 10)
+            
+            st.subheader("Fluid Substitution Parameters")
+            enable_fluid_sub = st.checkbox("Enable Fluid Substitution", True)
+            if enable_fluid_sub:
+                params['phi'] = st.slider("Porosity (ϕ)", 0.01, 0.5, 0.2, 0.01)
+                params['Km'] = st.number_input("Mineral Bulk Modulus (GPa)", 10.0, 100.0, 37.0, 1.0)
+                params['Gm'] = st.number_input("Mineral Shear Modulus (GPa)", 10.0, 100.0, 44.0, 1.0)
+                params['Kf'] = st.number_input("Fluid Bulk Modulus (GPa)", 0.1, 5.0, 2.2, 0.1)
+                params['new_fluid_density'] = st.number_input("New Fluid Density (g/cc)", 0.1, 1.5, 1.0, 0.1)
+            
+            # Add colormap selection
+            st.subheader("Visualization Options")
+            seismic_cmap = st.selectbox(
+                "Seismic Colormap",
+                options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma'],
+                index=0
+            )
+            
+            # Add button to show P-wave anisotropy section
+            show_anisotropy = st.checkbox("Show P-Wave Anisotropy Section", False)
+            
+            if st.button("Run Modeling"):
+                st.session_state.show_results = True
+                st.session_state.model_params = params
+                st.session_state.enable_fluid_sub = enable_fluid_sub
+                st.session_state.seismic_cmap = seismic_cmap
+                st.session_state.selected_angle = selected_angle
+                st.session_state.azimuth_step = azimuth_step
+                st.session_state.freq = freq
+                st.session_state.show_anisotropy = show_anisotropy
+        
+        # Main workspace content
+        if st.session_state.show_results:
+            if st.session_state.show_anisotropy:
+                pwave_anisotropy_section(
+                    st.session_state.model_params['e2'],
+                    st.session_state.model_params['dlt2'],
+                    st.session_state.model_params['vp2']
+                )
+            
+            results = run_modeling(
+                st.session_state.model_params,
+                st.session_state.enable_fluid_sub,
+                st.session_state.seismic_cmap,
+                st.session_state.selected_angle,
+                st.session_state.azimuth_step,
+                st.session_state.freq
+            )
+            display_results(
+                results,
+                st.session_state.seismic_cmap,
+                st.session_state.selected_angle
+            )
     
-    # Create 3D plot
-    try:
-        _3d_fig = visualizer.create_3d_surface_plot(
-            processor.azimuth_full,
-            processor.incidence_full,
-            data_full,
-            title="3D Surface Visualization",
-            output_path="output/azimuth_3d.png"
-        )
-        print(f"✓ 3D surface plot created")
-    except:
-        print("⚠ 3D plot skipped (optional dependency)")
-    
-    print()
-    
-    # Step 3: Generate image files
-    print("STEP 3: GENERATING IMAGE FILES")
-    print("-" * 40)
-    
-    img_generator = ImageGenerator()
-    
-    # Create grayscale image
-    gray_img = img_generator.create_grayscale_image(
-        data_full,
-        output_path="output/concatenated_grayscale.png",
-        scale_factor=10
-    )
-    print(f"✓ Grayscale image generated")
-    
-    # Create color image
-    color_img = img_generator.create_color_image(
-        data_full,
-        output_path="output/concatenated_color.png",
-        scale_factor=10,
-        colormap='plasma'
-    )
-    print(f"✓ Color image generated")
-    
-    print()
-    
-    # Step 4: Export data
-    print("STEP 4: EXPORTING DATA")
-    print("-" * 40)
-    
-    exporter = DataExporter()
-    
-    # Export to CSV
-    csv_df = exporter.export_to_csv(
-        processor.azimuth_full,
-        processor.incidence_full,
-        data_full,
-        output_path="output/concatenated_data.csv"
-    )
-    print(f"✓ CSV export complete")
-    
-    # Export to NumPy
-    exporter.export_to_numpy(
-        processor.azimuth_full,
-        processor.incidence_full,
-        data_full,
-        output_path="output/concatenated_data.npz"
-    )
-    print(f"✓ NumPy export complete")
-    
-    # Create statistics report
-    exporter.create_statistics_report(
-        data_full,
-        output_path="output/data_statistics.txt"
-    )
-    print(f"✓ Statistics report generated")
-    
-    print()
-    
-    # Step 5: Summary
-    print("STEP 5: PROCESSING COMPLETE")
-    print("-" * 40)
-    
-    print("✅ All processing steps completed successfully!")
-    print()
-    print("📁 OUTPUT FILES GENERATED:")
-    print("=" * 40)
-    print("1. output/azimuth_polar.png        - Polar coordinate visualization")
-    print("2. output/azimuth_rectangular.png  - Rectangular visualization")
-    print("3. output/azimuth_3d.png           - 3D surface plot")
-    print("4. output/concatenated_grayscale.png - Grayscale image")
-    print("5. output/concatenated_color.png   - Color image")
-    print("6. output/concatenated_data.csv    - Data in CSV format")
-    print("7. output/concatenated_data.npz    - Data in NumPy format")
-    print("8. output/data_statistics.txt      - Statistical analysis")
-    print()
-    print("📊 DATA SUMMARY:")
-    print("=" * 40)
-    print(f"   Azimuth range:    0-360° ({len(processor.azimuth_full)} points)")
-    print(f"   Incidence range:  0-50° ({len(processor.incidence_full)} points)")
-    print(f"   Data resolution:  {data_full.shape[0]} × {data_full.shape[1]}")
-    print(f"   Value range:      {np.min(data_full):.2f} to {np.max(data_full):.2f}")
-    print("=" * 70)
-
-# ============================================================================
-# CONFIGURATION AND EXECUTION
-# ============================================================================
+    else:  # Excel Import mode
+        st.session_state.modeling_mode = "excel"
+        st.session_state.show_results = False
+        
+        with st.sidebar:
+            st.header("Excel Import Settings")
+            
+            uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx", "xls"])
+            
+            if uploaded_file is not None:
+                try:
+                    # Read Excel to get full depth range
+                    df = pd.read_excel(uploaded_file, engine='openpyxl')
+                    min_depth = float(df['Depth'].min())
+                    max_depth = float(df['Depth'].max())
+                    
+                    st.subheader("Layer Depth Ranges")
+                    
+                    # Calculate default ranges (divide into thirds)
+                    range_size = (max_depth - min_depth) / 3
+                    default_ranges = [
+                        (min_depth, min_depth + range_size),
+                        (min_depth + range_size, min_depth + 2*range_size),
+                        (min_depth + 2*range_size, max_depth)
+                    ]
+                    
+                    depth_ranges = []
+                    layers = ["Upper (1)", "Target (2)", "Lower (3)"]
+                    
+                    for i, layer in enumerate(layers, 1):
+                        st.markdown(f"**{layer}**")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            min_val = st.number_input(
+                                f"Min Depth {i}", 
+                                min_value=min_depth, 
+                                max_value=max_depth,
+                                value=default_ranges[i-1][0],
+                                key=f"min_depth_{i}"
+                            )
+                        with col2:
+                            max_val = st.number_input(
+                                f"Max Depth {i}", 
+                                min_value=min_depth, 
+                                max_value=max_depth,
+                                value=default_ranges[i-1][1],
+                                key=f"max_depth_{i}"
+                            )
+                        # Ensure valid range
+                        if min_val >= max_val:
+                            st.error(f"Layer {i}: Min must be less than Max")
+                            continue
+                        depth_ranges.append((min_val, max_val))
+                    
+                    # Store depth ranges in session state
+                    if len(depth_ranges) == 3:
+                        st.session_state.depth_ranges = depth_ranges
+                        st.session_state.min_depth = min_depth
+                        st.session_state.max_depth = max_depth
+                    
+                    st.subheader("Acquisition Parameters")
+                    selected_angle = st.slider(
+                        "Angle of Incidence (deg)", 
+                        1, 70, 30, 1,
+                        help="Model will show results for this angle in 2D views",
+                        key="excel_angle"
+                    )
+                    freq = st.slider("Wavelet Frequency (Hz)", 10, 100, 45, key="excel_freq")
+                    azimuth_step = st.slider("Azimuth Step (deg)", 1, 30, 10, key="excel_azimuth_step")
+                    
+                    st.subheader("Fluid Substitution Parameters")
+                    enable_fluid_sub = st.checkbox("Enable Fluid Substitution", True, key="excel_fluid_sub")
+                    if enable_fluid_sub:
+                        phi = st.slider("Porosity (ϕ)", 0.01, 0.5, 0.2, 0.01, key="excel_phi")
+                        Km = st.number_input("Mineral Bulk Modulus (GPa)", 10.0, 100.0, 37.0, 1.0, key="excel_Km")
+                        Gm = st.number_input("Mineral Shear Modulus (GPa)", 10.0, 100.0, 44.0, 1.0, key="excel_Gm")
+                        Kf = st.number_input("Fluid Bulk Modulus (GPa)", 0.1, 5.0, 2.2, 0.1, key="excel_Kf")
+                        new_fluid_density = st.number_input("New Fluid Density (g/cc)", 0.1, 1.5, 1.0, 0.1, key="excel_fluid_density")
+                    
+                    st.subheader("Visualization Options")
+                    seismic_cmap = st.selectbox(
+                        "Seismic Colormap",
+                        options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma'],
+                        index=0, 
+                        key="excel_seismic_cmap"
+                    )
+                    
+                    show_anisotropy = st.checkbox("Show P-Wave Anisotropy Section", False, key="excel_show_anisotropy")
+                    
+                    if st.button("Run Modeling with Excel Data"):
+                        st.session_state.excel_data_processed = True
+                        st.session_state.uploaded_file = uploaded_file
+                        st.session_state.enable_fluid_sub = enable_fluid_sub
+                        st.session_state.seismic_cmap = seismic_cmap
+                        st.session_state.selected_angle = selected_angle
+                        st.session_state.azimuth_step = azimuth_step
+                        st.session_state.freq = freq
+                        st.session_state.show_anisotropy = show_anisotropy
+                        
+                        if enable_fluid_sub:
+                            st.session_state.phi = phi
+                            st.session_state.Km = Km
+                            st.session_state.Gm = Gm
+                            st.session_state.Kf = Kf
+                            st.session_state.new_fluid_density = new_fluid_density
+                
+                except Exception as e:
+                    st.error(f"Error reading Excel file: {str(e)}")
+        
+        # Main workspace content for Excel mode
+        if uploaded_file is not None and hasattr(st.session_state, 'depth_ranges'):
+            st.header("Depth Range Visualization")
+            plot_depth_ranges(
+                st.session_state.depth_ranges,
+                st.session_state.min_depth,
+                st.session_state.max_depth
+            )
+            
+            if st.session_state.excel_data_processed:
+                try:
+                    # Process Excel data with individual layer ranges
+                    params = process_excel_data(
+                        st.session_state.uploaded_file,
+                        st.session_state.depth_ranges
+                    )
+                    
+                    if params is not None:
+                        # Add fluid substitution parameters if enabled
+                        if st.session_state.enable_fluid_sub:
+                            params.update({
+                                'phi': st.session_state.phi,
+                                'Km': st.session_state.Km,
+                                'Gm': st.session_state.Gm,
+                                'Kf': st.session_state.Kf,
+                                'new_fluid_density': st.session_state.new_fluid_density
+                            })
+                        
+                        if st.session_state.show_anisotropy:
+                            pwave_anisotropy_section(params['e2'], params['dlt2'], params['vp2'])
+                        
+                        # Run modeling
+                        results = run_modeling(
+                            params,
+                            st.session_state.enable_fluid_sub,
+                            st.session_state.seismic_cmap,
+                            st.session_state.selected_angle,
+                            st.session_state.azimuth_step,
+                            st.session_state.freq
+                        )
+                        display_results(
+                            results,
+                            st.session_state.seismic_cmap,
+                            st.session_state.selected_angle
+                        )
+                
+                except Exception as e:
+                    st.error(f"Modeling error: {str(e)}")
 
 if __name__ == "__main__":
-    # Create output directory
-    import os
-    if not os.path.exists("output"):
-        os.makedirs("output")
-        print("Created 'output' directory for results")
-    
-    # Run the main function
-    try:
-        main()
-    except Exception as e:
-        print(f"❌ Error during execution: {e}")
-        print("\nTroubleshooting tips:")
-        print("1. Check if all required packages are installed:")
-        print("   pip install numpy matplotlib scipy pillow pandas")
-        print("2. Make sure the output directory is writable")
-        print("3. Check the data format in the load_original_data() method")
+    main()
