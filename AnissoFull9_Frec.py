@@ -2,10 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import streamlit as st
-from scipy.signal import convolve, morlet2
+from scipy.signal import convolve
 import pandas as pd
 import io
-from scipy import signal
 
 # ==============================================
 # Core Functions (unchanged)
@@ -82,6 +81,10 @@ def create_3d_plot(x, y, z, vp):
     )
     return fig
 
+def morlet_wavelet(t, s=1.0, w=5.0):
+    """Morlet wavelet function"""
+    return np.pi**(-0.25) * np.exp(1j * w * t) * np.exp(-0.5 * t**2)
+
 def cwt_analysis(signal_data, scales, wavelet_type='morlet'):
     """Perform Continuous Wavelet Transform on signal data"""
     # Create empty array for CWT results
@@ -89,15 +92,18 @@ def cwt_analysis(signal_data, scales, wavelet_type='morlet'):
     
     # Perform CWT for each scale
     for i, scale in enumerate(scales):
+        # Create wavelet
         if wavelet_type == 'morlet':
-            # Morlet wavelet
-            wavelet = morlet2(scale * 10, scale)
+            # Morlet wavelet implementation
+            t = np.linspace(-scale*4, scale*4, scale*8 + 1)
+            wavelet = morlet_wavelet(t/scale)
+            wavelet = wavelet.real  # Take real part for analysis
         else:
-            # Ricker wavelet (Mexican hat)
-            x = np.linspace(-scale * 4, scale * 4, scale * 10)
-            wavelet = (2/(np.sqrt(3*scale)*np.pi**0.25)) * (1 - (x/scale)**2) * np.exp(-(x**2)/(2*scale**2))
+            # Ricker wavelet (Mexican hat) as fallback
+            t = np.linspace(-scale*4, scale*4, scale*8 + 1)
+            wavelet = (2/(np.sqrt(3*scale)*np.pi**0.25)) * (1 - (t/scale)**2) * np.exp(-(t**2)/(2*scale**2))
         
-        # Ensure wavelet is centered
+        # Normalize wavelet
         wavelet = wavelet / np.sqrt(np.sum(np.abs(wavelet)**2))
         
         # Convolution with signal
@@ -111,7 +117,7 @@ def plot_cwt_comparison(results, seismic_cmap):
     st.header("Continuous Wavelet Transform (CWT) Analysis")
     
     # Define scales for CWT (related to frequencies)
-    scales = np.arange(1, 51, 2)
+    scales = np.arange(1, 31, 2)  # Reduced from 51 to 31 for faster computation
     
     # Select a specific azimuth for detailed CWT analysis (midpoint)
     selected_azimuth_idx = len(results['azimuths']) // 2
@@ -158,7 +164,7 @@ def plot_cwt_comparison(results, seismic_cmap):
                 cwt_data = orig_cwt_results[idx]
                 im = axs1[idx].imshow(cwt_data, aspect='auto', 
                                     cmap='viridis',
-                                    extent=[0, 150, scales[-1], scales[0]])
+                                    extent=[0, cwt_data.shape[1], scales[-1], scales[0]])
                 axs1[idx].set_title(f'{theta_deg}° Incidence')
                 axs1[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
                 axs1[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
@@ -176,7 +182,7 @@ def plot_cwt_comparison(results, seismic_cmap):
                 cwt_data = sub_cwt_results[idx]
                 im = axs2[idx].imshow(cwt_data, aspect='auto', 
                                     cmap='viridis',
-                                    extent=[0, 150, scales[-1], scales[0]])
+                                    extent=[0, cwt_data.shape[1], scales[-1], scales[0]])
                 axs2[idx].set_title(f'{theta_deg}° Incidence')
                 axs2[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
                 axs2[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
@@ -197,7 +203,7 @@ def plot_cwt_comparison(results, seismic_cmap):
                 im = axs3[idx].imshow(cwt_diff, aspect='auto', 
                                     cmap='RdBu',
                                     vmin=-vmax, vmax=vmax,
-                                    extent=[0, 150, scales[-1], scales[0]])
+                                    extent=[0, cwt_data.shape[1], scales[-1], scales[0]])
                 axs3[idx].set_title(f'{theta_deg}° Incidence')
                 axs3[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
                 axs3[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
