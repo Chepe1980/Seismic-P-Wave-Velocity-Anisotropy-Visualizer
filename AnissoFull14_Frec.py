@@ -1060,6 +1060,8 @@ def main():
         st.session_state.excel_data_processed = False
     if 'show_results' not in st.session_state:
         st.session_state.show_results = False
+    if 'show_anisotropy_section' not in st.session_state:
+        st.session_state.show_anisotropy_section = False
     
     # Modeling mode selection
     modeling_mode = st.sidebar.radio(
@@ -1134,6 +1136,7 @@ def main():
             
             if st.button("Run Modeling"):
                 st.session_state.show_results = True
+                st.session_state.show_anisotropy_section = show_anisotropy  # Store the checkbox state
                 st.session_state.model_params = params
                 st.session_state.enable_fluid_sub = enable_fluid_sub
                 st.session_state.main_cmap = main_cmap
@@ -1141,18 +1144,21 @@ def main():
                 st.session_state.selected_angle = selected_angle
                 st.session_state.azimuth_step = azimuth_step
                 st.session_state.freq = freq
-                st.session_state.show_anisotropy = show_anisotropy
         
         # Main workspace content
         if st.session_state.show_results:
-            if st.session_state.show_anisotropy:
+            # Show P-wave anisotropy section if checkbox was checked
+            if st.session_state.show_anisotropy_section:
+                st.markdown("---")
                 pwave_anisotropy_section_plotly(
                     st.session_state.model_params['e2'],
                     st.session_state.model_params['dlt2'],
                     st.session_state.model_params['vp2'],
                     st.session_state.main_cmap
                 )
+                st.markdown("---")
             
+            # Run the main modeling
             results = run_modeling(
                 st.session_state.model_params,
                 st.session_state.enable_fluid_sub,
@@ -1252,6 +1258,7 @@ def main():
                     
                     if st.button("Run Modeling with Excel Data"):
                         st.session_state.excel_data_processed = True
+                        st.session_state.show_anisotropy_section = show_anisotropy  # Store the checkbox state
                         st.session_state.uploaded_file = uploaded_file
                         st.session_state.enable_fluid_sub = enable_fluid_sub
                         st.session_state.main_cmap = main_cmap
@@ -1259,7 +1266,6 @@ def main():
                         st.session_state.selected_angle = selected_angle
                         st.session_state.azimuth_step = azimuth_step
                         st.session_state.freq = freq
-                        st.session_state.show_anisotropy = show_anisotropy
                         
                         if enable_fluid_sub:
                             st.session_state.phi = phi
@@ -1299,8 +1305,11 @@ def main():
                                 'new_fluid_density': st.session_state.new_fluid_density
                             })
                         
-                        if st.session_state.show_anisotropy:
+                        # Show P-wave anisotropy section if checkbox was checked
+                        if st.session_state.show_anisotropy_section:
+                            st.markdown("---")
                             pwave_anisotropy_section_plotly(params['e2'], params['dlt2'], params['vp2'], st.session_state.main_cmap)
+                            st.markdown("---")
                         
                         # Run modeling
                         results = run_modeling(
