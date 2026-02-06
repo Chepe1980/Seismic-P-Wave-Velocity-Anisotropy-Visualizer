@@ -85,39 +85,52 @@ def morlet_wavelet(t, s=1.0, w=5.0):
     """Morlet wavelet function"""
     return np.pi**(-0.25) * np.exp(1j * w * t) * np.exp(-0.5 * t**2)
 
-def cwt_analysis(signal_data, scales, wavelet_type='morlet'):
+def cwt_analysis(signal_data, scales):
     """Perform Continuous Wavelet Transform on signal data"""
+    n_samples = len(signal_data)
+    n_scales = len(scales)
+    
     # Create empty array for CWT results
-    cwt_matrix = np.zeros((len(scales), len(signal_data)), dtype=complex)
+    cwt_matrix = np.zeros((n_scales, n_samples))
     
     # Perform CWT for each scale
     for i, scale in enumerate(scales):
-        # Create wavelet
-        if wavelet_type == 'morlet':
-            # Morlet wavelet implementation
-            t = np.linspace(-scale*4, scale*4, scale*8 + 1)
-            wavelet = morlet_wavelet(t/scale)
-            wavelet = wavelet.real  # Take real part for analysis
-        else:
-            # Ricker wavelet (Mexican hat) as fallback
-            t = np.linspace(-scale*4, scale*4, scale*8 + 1)
-            wavelet = (2/(np.sqrt(3*scale)*np.pi**0.25)) * (1 - (t/scale)**2) * np.exp(-(t**2)/(2*scale**2))
+        # Ensure scale is at least 1
+        scale = max(1, scale)
+        
+        # Create wavelet with proper length
+        wavelet_length = min(10 * scale, n_samples)
+        if wavelet_length % 2 == 0:
+            wavelet_length += 1  # Make it odd for symmetry
+        
+        t = np.linspace(-scale*3, scale*3, wavelet_length)
+        wavelet = morlet_wavelet(t/scale)
+        wavelet = wavelet.real  # Take real part for analysis
         
         # Normalize wavelet
         wavelet = wavelet / np.sqrt(np.sum(np.abs(wavelet)**2))
         
-        # Convolution with signal
+        # Convolution with signal (mode='same' returns same length)
         conv_result = np.convolve(signal_data, wavelet, mode='same')
-        cwt_matrix[i, :] = conv_result
+        
+        # Ensure we have the right length
+        if len(conv_result) == n_samples:
+            cwt_matrix[i, :] = conv_result
+        else:
+            # Trim or pad to match expected length
+            if len(conv_result) > n_samples:
+                cwt_matrix[i, :] = conv_result[:n_samples]
+            else:
+                cwt_matrix[i, :n_samples] = conv_result
     
-    return np.abs(cwt_matrix)  # Return magnitude
+    return cwt_matrix  # Return magnitude
 
 def plot_cwt_comparison(results, seismic_cmap):
     """Plot CWT analysis for all angles and azimuths"""
     st.header("Continuous Wavelet Transform (CWT) Analysis")
     
     # Define scales for CWT (related to frequencies)
-    scales = np.arange(1, 31, 2)  # Reduced from 51 to 31 for faster computation
+    scales = np.arange(1, 21, 2)  # Reduced further for faster, more stable computation
     
     # Select a specific azimuth for detailed CWT analysis (midpoint)
     selected_azimuth_idx = len(results['azimuths']) // 2
@@ -139,15 +152,26 @@ def plot_cwt_comparison(results, seismic_cmap):
     with st.spinner("Performing CWT analysis..."):
         for i, theta in enumerate(results['incidence_angles']):
             # Original seismic CWT
-            cwt_orig = cwt_analysis(orig_seismic_az[i], scales)
-            orig_cwt_results.append(cwt_orig)
+            if len(orig_seismic_az[i]) > 0:
+                cwt_orig = cwt_analysis(orig_seismic_az[i], scales)
+                orig_cwt_results.append(cwt_orig)
+            else:
+                orig_cwt_results.append(np.zeros((len(scales), 1)))
             
             # Fluid-substituted seismic CWT
-            cwt_sub = cwt_analysis(sub_seismic_az[i], scales)
-            sub_cwt_results.append(cwt_sub)
+            if len(sub_seismic_az[i]) > 0:
+                cwt_sub = cwt_analysis(sub_seismic_az[i], scales)
+                sub_cwt_results.append(cwt_sub)
+            else:
+                sub_cwt_results.append(np.zeros((len(scales), 1)))
     
     # Display CWT comparison
     st.subheader(f"CWT Comparison at Azimuth = {selected_azimuth}°")
+    
+    # Check if we have valid CWT results
+    if len(orig_cwt_results) == 0 or len(sub_cwt_results) == 0:
+        st.warning("CWT analysis could not be performed due to data issues.")
+        return
     
     # Create tabs for different visualizations
     cwt_tab1, cwt_tab2, cwt_tab3 = st.tabs(["Original Seismic CWT", "Fluid-Substituted CWT", "CWT Difference"])
@@ -160,15 +184,16 @@ def plot_cwt_comparison(results, seismic_cmap):
         axs1 = axs1.flatten() if n_rows > 1 else [axs1]
         
         for idx, theta_deg in enumerate(results['incidence_angles']):
-            if idx < len(axs1):
+            if idx < len(axs1) and idx < len(orig_cwt_results):
                 cwt_data = orig_cwt_results[idx]
-                im = axs1[idx].imshow(cwt_data, aspect='auto', 
-                                    cmap='viridis',
-                                    extent=[0, cwt_data.shape[1], scales[-1], scales[0]])
-                axs1[idx].set_title(f'{theta_deg}° Incidence')
-                axs1[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
-                axs1[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
-                plt.colorbar(im, ax=axs1[idx], label='CWT Magnitude')
+                if cwt_data.size > 0:
+                    im = axs1[idx].imshow(cwt_data, aspect='auto', 
+                                        cmap='viridis',
+                                        extent=[0, cwt_data.shape[1], scales[-1], scales[0]])
+                    axs1[idx].set_title(f'{theta_deg}° Incidence')
+                    axs1[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
+                    axs1[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
+                    plt.colorbar(im, ax=axs1[idx], label='CWT Magnitude')
         
         plt.tight_layout()
         st.pyplot(fig1)
@@ -178,15 +203,16 @@ def plot_cwt_comparison(results, seismic_cmap):
         axs2 = axs2.flatten() if n_rows > 1 else [axs2]
         
         for idx, theta_deg in enumerate(results['incidence_angles']):
-            if idx < len(axs2):
+            if idx < len(axs2) and idx < len(sub_cwt_results):
                 cwt_data = sub_cwt_results[idx]
-                im = axs2[idx].imshow(cwt_data, aspect='auto', 
-                                    cmap='viridis',
-                                    extent=[0, cwt_data.shape[1], scales[-1], scales[0]])
-                axs2[idx].set_title(f'{theta_deg}° Incidence')
-                axs2[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
-                axs2[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
-                plt.colorbar(im, ax=axs2[idx], label='CWT Magnitude')
+                if cwt_data.size > 0:
+                    im = axs2[idx].imshow(cwt_data, aspect='auto', 
+                                        cmap='viridis',
+                                        extent=[0, cwt_data.shape[1], scales[-1], scales[0]])
+                    axs2[idx].set_title(f'{theta_deg}° Incidence')
+                    axs2[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
+                    axs2[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
+                    plt.colorbar(im, ax=axs2[idx], label='CWT Magnitude')
         
         plt.tight_layout()
         st.pyplot(fig2)
@@ -197,17 +223,19 @@ def plot_cwt_comparison(results, seismic_cmap):
         axs3 = axs3.flatten() if n_rows > 1 else [axs3]
         
         for idx, theta_deg in enumerate(results['incidence_angles']):
-            if idx < len(axs3):
-                cwt_diff = sub_cwt_results[idx] - orig_cwt_results[idx]
-                vmax = np.max(np.abs(cwt_diff))
-                im = axs3[idx].imshow(cwt_diff, aspect='auto', 
-                                    cmap='RdBu',
-                                    vmin=-vmax, vmax=vmax,
-                                    extent=[0, cwt_data.shape[1], scales[-1], scales[0]])
-                axs3[idx].set_title(f'{theta_deg}° Incidence')
-                axs3[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
-                axs3[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
-                plt.colorbar(im, ax=axs3[idx], label='CWT Difference')
+            if idx < len(axs3) and idx < len(orig_cwt_results) and idx < len(sub_cwt_results):
+                if orig_cwt_results[idx].size > 0 and sub_cwt_results[idx].size > 0:
+                    cwt_diff = sub_cwt_results[idx] - orig_cwt_results[idx]
+                    if cwt_diff.size > 0:
+                        vmax = np.max(np.abs(cwt_diff))
+                        im = axs3[idx].imshow(cwt_diff, aspect='auto', 
+                                            cmap='RdBu',
+                                            vmin=-vmax, vmax=vmax,
+                                            extent=[0, cwt_diff.shape[1], scales[-1], scales[0]])
+                        axs3[idx].set_title(f'{theta_deg}° Incidence')
+                        axs3[idx].set_xlabel('Time Sample' if idx >= (n_rows-1)*n_cols else '')
+                        axs3[idx].set_ylabel('Scale' if idx % n_cols == 0 else '')
+                        plt.colorbar(im, ax=axs3[idx], label='CWT Difference')
         
         plt.tight_layout()
         st.pyplot(fig3)
@@ -217,86 +245,106 @@ def plot_cwt_comparison(results, seismic_cmap):
     
     # Select middle incidence angle for 3D visualization
     mid_angle_idx = len(results['incidence_angles']) // 2
-    mid_angle = results['incidence_angles'][mid_angle_idx]
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Original CWT 3D
-        cwt_data_orig = orig_cwt_results[mid_angle_idx]
-        x_cwt, y_cwt = np.meshgrid(np.arange(cwt_data_orig.shape[1]), scales)
+    if mid_angle_idx < len(orig_cwt_results) and mid_angle_idx < len(sub_cwt_results):
+        mid_angle = results['incidence_angles'][mid_angle_idx]
         
-        fig_cwt_orig = go.Figure(data=[go.Surface(
-            z=cwt_data_orig,
-            x=x_cwt,
-            y=y_cwt,
-            colorscale='Viridis'
-        )])
-        fig_cwt_orig.update_layout(
-            scene=dict(
-                xaxis_title='Time Sample',
-                yaxis_title='Scale',
-                zaxis_title='CWT Magnitude',
-                camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
-            ),
-            title=f"Original CWT Spectrum at {mid_angle}°",
-            height=500
-        )
-        st.plotly_chart(fig_cwt_orig, use_container_width=True)
-    
-    with col2:
-        # Fluid-substituted CWT 3D
-        cwt_data_sub = sub_cwt_results[mid_angle_idx]
+        col1, col2 = st.columns(2)
         
-        fig_cwt_sub = go.Figure(data=[go.Surface(
-            z=cwt_data_sub,
-            x=x_cwt,
-            y=y_cwt,
-            colorscale='Viridis'
-        )])
-        fig_cwt_sub.update_layout(
-            scene=dict(
-                xaxis_title='Time Sample',
-                yaxis_title='Scale',
-                zaxis_title='CWT Magnitude',
-                camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
-            ),
-            title=f"Fluid-Substituted CWT Spectrum at {mid_angle}°",
-            height=500
-        )
-        st.plotly_chart(fig_cwt_sub, use_container_width=True)
+        with col1:
+            # Original CWT 3D
+            cwt_data_orig = orig_cwt_results[mid_angle_idx]
+            if cwt_data_orig.size > 0:
+                x_cwt, y_cwt = np.meshgrid(np.arange(cwt_data_orig.shape[1]), scales)
+                
+                fig_cwt_orig = go.Figure(data=[go.Surface(
+                    z=cwt_data_orig,
+                    x=x_cwt,
+                    y=y_cwt,
+                    colorscale='Viridis'
+                )])
+                fig_cwt_orig.update_layout(
+                    scene=dict(
+                        xaxis_title='Time Sample',
+                        yaxis_title='Scale',
+                        zaxis_title='CWT Magnitude',
+                        camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+                    ),
+                    title=f"Original CWT Spectrum at {mid_angle}°",
+                    height=500
+                )
+                st.plotly_chart(fig_cwt_orig, use_container_width=True)
+        
+        with col2:
+            # Fluid-substituted CWT 3D
+            cwt_data_sub = sub_cwt_results[mid_angle_idx]
+            if cwt_data_sub.size > 0:
+                fig_cwt_sub = go.Figure(data=[go.Surface(
+                    z=cwt_data_sub,
+                    x=x_cwt,
+                    y=y_cwt,
+                    colorscale='Viridis'
+                )])
+                fig_cwt_sub.update_layout(
+                    scene=dict(
+                        xaxis_title='Time Sample',
+                        yaxis_title='Scale',
+                        zaxis_title='CWT Magnitude',
+                        camera=dict(eye=dict(x=1.5, y=1.5, z=0.8))
+                    ),
+                    title=f"Fluid-Substituted CWT Spectrum at {mid_angle}°",
+                    height=500
+                )
+                st.plotly_chart(fig_cwt_sub, use_container_width=True)
     
     # Frequency content comparison
     st.subheader("Frequency Content Analysis")
     
     # Calculate average CWT magnitude across time for each scale/angle
-    orig_avg_cwt = np.array([np.mean(cwt, axis=1) for cwt in orig_cwt_results])
-    sub_avg_cwt = np.array([np.mean(cwt, axis=1) for cwt in sub_cwt_results])
-    
-    fig4, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-    
-    # Original average CWT
-    im1 = ax1.imshow(orig_avg_cwt.T, aspect='auto', 
-                    extent=[results['incidence_angles'][0], results['incidence_angles'][-1], 
-                           scales[-1], scales[0]],
-                    cmap='viridis')
-    ax1.set_xlabel('Incidence Angle (deg)')
-    ax1.set_ylabel('Scale')
-    ax1.set_title('Original: Average CWT Magnitude')
-    plt.colorbar(im1, ax=ax1, label='CWT Magnitude')
-    
-    # Fluid-substituted average CWT
-    im2 = ax2.imshow(sub_avg_cwt.T, aspect='auto', 
-                    extent=[results['incidence_angles'][0], results['incidence_angles'][-1], 
-                           scales[-1], scales[0]],
-                    cmap='viridis')
-    ax2.set_xlabel('Incidence Angle (deg)')
-    ax2.set_ylabel('Scale')
-    ax2.set_title('Fluid-Substituted: Average CWT Magnitude')
-    plt.colorbar(im2, ax=ax2, label='CWT Magnitude')
-    
-    plt.tight_layout()
-    st.pyplot(fig4)
+    try:
+        orig_avg_cwt = []
+        sub_avg_cwt = []
+        
+        for i in range(len(orig_cwt_results)):
+            if orig_cwt_results[i].size > 0:
+                orig_avg_cwt.append(np.mean(orig_cwt_results[i], axis=1))
+            else:
+                orig_avg_cwt.append(np.zeros(len(scales)))
+            
+            if sub_cwt_results[i].size > 0:
+                sub_avg_cwt.append(np.mean(sub_cwt_results[i], axis=1))
+            else:
+                sub_avg_cwt.append(np.zeros(len(scales)))
+        
+        if orig_avg_cwt and sub_avg_cwt:
+            orig_avg_cwt = np.array(orig_avg_cwt)
+            sub_avg_cwt = np.array(sub_avg_cwt)
+            
+            fig4, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            
+            # Original average CWT
+            im1 = ax1.imshow(orig_avg_cwt.T, aspect='auto', 
+                            extent=[results['incidence_angles'][0], results['incidence_angles'][-1], 
+                                   scales[-1], scales[0]],
+                            cmap='viridis')
+            ax1.set_xlabel('Incidence Angle (deg)')
+            ax1.set_ylabel('Scale')
+            ax1.set_title('Original: Average CWT Magnitude')
+            plt.colorbar(im1, ax=ax1, label='CWT Magnitude')
+            
+            # Fluid-substituted average CWT
+            im2 = ax2.imshow(sub_avg_cwt.T, aspect='auto', 
+                            extent=[results['incidence_angles'][0], results['incidence_angles'][-1], 
+                                   scales[-1], scales[0]],
+                            cmap='viridis')
+            ax2.set_xlabel('Incidence Angle (deg)')
+            ax2.set_ylabel('Scale')
+            ax2.set_title('Fluid-Substituted: Average CWT Magnitude')
+            plt.colorbar(im2, ax=ax2, label='CWT Magnitude')
+            
+            plt.tight_layout()
+            st.pyplot(fig4)
+    except Exception as e:
+        st.warning(f"Could not display frequency content analysis: {str(e)}")
 
 def pwave_anisotropy_section(epsilon, delta, vp0):
     st.header("P-Wave Velocity Anisotropy Visualizer")
