@@ -139,7 +139,8 @@ def plot_horizontal_angles_seismic(results, seismic_cmap, diff_cmap):
     st.subheader("Original Seismic - Horizontal Angle Arrangement")
     
     # Create figure with subplots arranged horizontally
-    fig1, axes1 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    fig1, axes1 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True, 
+                                gridspec_kw={'width_ratios': [1]*n_angles, 'wspace': 0.3})
     
     # If only one angle, axes1 is not iterable
     if n_angles == 1:
@@ -174,8 +175,11 @@ def plot_horizontal_angles_seismic(results, seismic_cmap, diff_cmap):
         else:
             ax.set_yticklabels([])
     
-    # Add colorbar with smaller size
-    plt.colorbar(im, ax=axes1, location='bottom', pad=0.05, label='Amplitude', shrink=0.6)
+    # Add colorbar on the right side, smaller and vertical
+    cbar1 = plt.colorbar(im, ax=axes1, location='right', pad=0.01, shrink=0.4)
+    cbar1.set_label('Amplitude', fontsize=10)
+    cbar1.ax.tick_params(labelsize=8)
+    
     plt.suptitle('Original Seismic - All Incidence Angles (0-50°)', fontsize=14, y=0.95)
     plt.tight_layout()
     st.pyplot(fig1)
@@ -184,7 +188,8 @@ def plot_horizontal_angles_seismic(results, seismic_cmap, diff_cmap):
     st.subheader("Fluid-Substituted Seismic - Horizontal Angle Arrangement")
     
     # Create figure with subplots arranged horizontally
-    fig2, axes2 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    fig2, axes2 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True,
+                                gridspec_kw={'width_ratios': [1]*n_angles, 'wspace': 0.3})
     
     # If only one angle, axes2 is not iterable
     if n_angles == 1:
@@ -219,8 +224,11 @@ def plot_horizontal_angles_seismic(results, seismic_cmap, diff_cmap):
         else:
             ax.set_yticklabels([])
     
-    # Add colorbar with smaller size
-    plt.colorbar(im, ax=axes2, location='bottom', pad=0.05, label='Amplitude', shrink=0.6)
+    # Add colorbar on the right side, smaller and vertical
+    cbar2 = plt.colorbar(im, ax=axes2, location='right', pad=0.01, shrink=0.4)
+    cbar2.set_label('Amplitude', fontsize=10)
+    cbar2.ax.tick_params(labelsize=8)
+    
     plt.suptitle('Fluid-Substituted Seismic - All Incidence Angles (0-50°)', fontsize=14, y=0.95)
     plt.tight_layout()
     st.pyplot(fig2)
@@ -229,7 +237,8 @@ def plot_horizontal_angles_seismic(results, seismic_cmap, diff_cmap):
     st.subheader("Seismic Difference - Horizontal Angle Arrangement")
     
     # Create figure with subplots arranged horizontally
-    fig3, axes3 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    fig3, axes3 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True,
+                                gridspec_kw={'width_ratios': [1]*n_angles, 'wspace': 0.3})
     
     # If only one angle, axes3 is not iterable
     if n_angles == 1:
@@ -265,8 +274,11 @@ def plot_horizontal_angles_seismic(results, seismic_cmap, diff_cmap):
         else:
             ax.set_yticklabels([])
     
-    # Add colorbar with smaller size
-    plt.colorbar(im, ax=axes3, location='bottom', pad=0.05, label='Amplitude Difference', shrink=0.6)
+    # Add colorbar on the right side, smaller and vertical
+    cbar3 = plt.colorbar(im, ax=axes3, location='right', pad=0.01, shrink=0.4)
+    cbar3.set_label('Amplitude Difference', fontsize=10)
+    cbar3.ax.tick_params(labelsize=8)
+    
     plt.suptitle('Seismic Difference (Fluid-Substituted - Original)', fontsize=14, y=0.95)
     plt.tight_layout()
     st.pyplot(fig3)
@@ -319,7 +331,8 @@ def plot_horizontal_angles_cwt(results, cwt_scale, cwt_cmap, diff_cmap):
     st.subheader(f"Original CWT at Scale {cwt_scale} - Horizontal Angle Arrangement")
     
     # Create figure with subplots arranged horizontally
-    fig1, axes1 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    fig1, axes1 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True,
+                                gridspec_kw={'width_ratios': [1]*n_angles, 'wspace': 0.3})
     
     # If only one angle, axes1 is not iterable
     if n_angles == 1:
@@ -354,8 +367,11 @@ def plot_horizontal_angles_cwt(results, cwt_scale, cwt_cmap, diff_cmap):
         else:
             ax.set_yticklabels([])
     
-    # Add colorbar with smaller size
-    plt.colorbar(im, ax=axes1, location='bottom', pad=0.05, label='CWT Magnitude', shrink=0.6)
+    # Add colorbar on the right side, smaller and vertical
+    cbar1 = plt.colorbar(im, ax=axes1, location='right', pad=0.01, shrink=0.4)
+    cbar1.set_label('CWT Magnitude', fontsize=10)
+    cbar1.ax.tick_params(labelsize=8)
+    
     plt.suptitle(f'Original CWT at Scale {cwt_scale} - All Incidence Angles (0-50°)', fontsize=14, y=0.95)
     plt.tight_layout()
     st.pyplot(fig1)
@@ -364,7 +380,8 @@ def plot_horizontal_angles_cwt(results, cwt_scale, cwt_cmap, diff_cmap):
     st.subheader(f"Fluid-Substituted CWT at Scale {cwt_scale} - Horizontal Angle Arrangement")
     
     # Create figure with subplots arranged horizontally
-    fig2, axes2 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    fig2, axes2 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True,
+                                gridspec_kw={'width_ratios': [1]*n_angles, 'wspace': 0.3})
     
     # If only one angle, axes2 is not iterable
     if n_angles == 1:
@@ -399,8 +416,11 @@ def plot_horizontal_angles_cwt(results, cwt_scale, cwt_cmap, diff_cmap):
         else:
             ax.set_yticklabels([])
     
-    # Add colorbar with smaller size
-    plt.colorbar(im, ax=axes2, location='bottom', pad=0.05, label='CWT Magnitude', shrink=0.6)
+    # Add colorbar on the right side, smaller and vertical
+    cbar2 = plt.colorbar(im, ax=axes2, location='right', pad=0.01, shrink=0.4)
+    cbar2.set_label('CWT Magnitude', fontsize=10)
+    cbar2.ax.tick_params(labelsize=8)
+    
     plt.suptitle(f'Fluid-Substituted CWT at Scale {cwt_scale} - All Incidence Angles (0-50°)', fontsize=14, y=0.95)
     plt.tight_layout()
     st.pyplot(fig2)
@@ -409,7 +429,8 @@ def plot_horizontal_angles_cwt(results, cwt_scale, cwt_cmap, diff_cmap):
     st.subheader(f"CWT Difference at Scale {cwt_scale} - Horizontal Angle Arrangement")
     
     # Create figure with subplots arranged horizontally
-    fig3, axes3 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True)
+    fig3, axes3 = plt.subplots(1, n_angles, figsize=(3*n_angles, 8), sharey=True,
+                                gridspec_kw={'width_ratios': [1]*n_angles, 'wspace': 0.3})
     
     # If only one angle, axes3 is not iterable
     if n_angles == 1:
@@ -448,8 +469,11 @@ def plot_horizontal_angles_cwt(results, cwt_scale, cwt_cmap, diff_cmap):
         else:
             ax.set_yticklabels([])
     
-    # Add colorbar with smaller size
-    plt.colorbar(im, ax=axes3, location='bottom', pad=0.05, label='CWT Magnitude Difference', shrink=0.6)
+    # Add colorbar on the right side, smaller and vertical
+    cbar3 = plt.colorbar(im, ax=axes3, location='right', pad=0.01, shrink=0.4)
+    cbar3.set_label('CWT Magnitude Difference', fontsize=10)
+    cbar3.ax.tick_params(labelsize=8)
+    
     plt.suptitle(f'CWT Difference at Scale {cwt_scale} (Fluid-Substituted - Original)', fontsize=14, y=0.95)
     plt.tight_layout()
     st.pyplot(fig3)
@@ -704,7 +728,7 @@ def display_results(results, seismic_cmap, diff_cmap, cwt_cmap, selected_angle):
             z=results['reflectivity_orig'],
             x=results['azimuths'],
             y=results['incidence_angles'],
-            colorscale='jet',
+            colorscale=seismic_cmap,
             cmin=zmin,
             cmax=zmax
         )])
@@ -725,7 +749,7 @@ def display_results(results, seismic_cmap, diff_cmap, cwt_cmap, selected_angle):
             z=results['reflectivity_sub'],
             x=results['azimuths'],
             y=results['incidence_angles'],
-            colorscale='Jet',
+            colorscale=seismic_cmap,
             cmin=zmin,
             cmax=zmax
         )])
@@ -787,8 +811,7 @@ def display_results(results, seismic_cmap, diff_cmap, cwt_cmap, selected_angle):
         st.markdown("- Scale 20: Lowest frequency trends")
     with col3:
         st.markdown("**Current Colormaps:**")
-        st.markdown(f"- Seismic: {seismic_cmap}")
-        st.markdown(f"- CWT: {cwt_cmap}")
+        st.markdown(f"- Seismic/CWT: {seismic_cmap}")
         st.markdown(f"- Difference: {diff_cmap}")
     
     # Call the new horizontal CWT plotting function
@@ -824,7 +847,9 @@ def display_results(results, seismic_cmap, diff_cmap, cwt_cmap, selected_angle):
     ax1.set_xlabel('Time Sample')
     ax1.set_ylabel('Scale (Lower = Higher Frequency)')
     ax1.set_title(f'Original: CWT Scale-Time at {mid_angle}° Incidence')
-    plt.colorbar(im1, ax=ax1, label='CWT Magnitude', shrink=0.8)
+    cbar1 = plt.colorbar(im1, ax=ax1, location='right', pad=0.02, shrink=0.6)
+    cbar1.set_label('CWT Magnitude', fontsize=10)
+    cbar1.ax.tick_params(labelsize=8)
     
     # Fluid-substituted CWT scale-time
     im2 = ax2.imshow(cwt_sub_full, aspect='auto', 
@@ -833,7 +858,9 @@ def display_results(results, seismic_cmap, diff_cmap, cwt_cmap, selected_angle):
     ax2.set_xlabel('Time Sample')
     ax2.set_ylabel('Scale (Lower = Higher Frequency)')
     ax2.set_title(f'Fluid-Substituted: CWT Scale-Time at {mid_angle}° Incidence')
-    plt.colorbar(im2, ax=ax2, label='CWT Magnitude', shrink=0.8)
+    cbar2 = plt.colorbar(im2, ax=ax2, location='right', pad=0.02, shrink=0.6)
+    cbar2.set_label('CWT Magnitude', fontsize=10)
+    cbar2.ax.tick_params(labelsize=8)
     
     plt.tight_layout()
     st.pyplot(fig3)
@@ -853,7 +880,9 @@ def display_results(results, seismic_cmap, diff_cmap, cwt_cmap, selected_angle):
     ax4.set(xlabel='Incidence Angle (degrees)', 
            ylabel='Azimuth (degrees)',
            title='Reflectivity Difference (Fluid-Substituted - Original)')
-    plt.colorbar(im, ax=ax4, label='Reflectivity Difference', shrink=0.8)
+    cbar4 = plt.colorbar(im, ax=ax4, location='right', pad=0.02, shrink=0.8)
+    cbar4.set_label('Reflectivity Difference', fontsize=10)
+    cbar4.ax.tick_params(labelsize=8)
     st.pyplot(fig4)
     
     # 3D Difference plot
@@ -899,20 +928,13 @@ def main():
     # Colormap selection in sidebar for all plots
     st.sidebar.header("Colormap Settings")
     
-    # Seismic colormap
-    seismic_cmap = st.sidebar.selectbox(
-        "Seismic Colormap",
-        options=['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma', 'jet', 'rainbow', 'turbo'],
-        index=0,
-        help="Colormap for seismic amplitude plots"
-    )
-    
-    # CWT colormap
-    cwt_cmap = st.sidebar.selectbox(
-        "CWT Colormap",
-        options=['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'hot', 'cool', 'spring', 'summer', 'autumn', 'winter'],
-        index=0,
-        help="Colormap for CWT magnitude plots"
+    # Main colormap for seismic and CWT plots (same for both)
+    main_cmap = st.sidebar.selectbox(
+        "Main Colormap (Seismic & CWT)",
+        options=['jet', 'seismic', 'viridis', 'plasma', 'inferno', 'magma', 'cividis', 
+                 'hot', 'cool', 'spring', 'summer', 'autumn', 'winter', 'rainbow', 'turbo'],
+        index=0,  # jet as default
+        help="Colormap for seismic amplitude and CWT magnitude plots"
     )
     
     # Difference colormap
@@ -969,8 +991,7 @@ def main():
                 st.session_state.show_results = True
                 st.session_state.model_params = params
                 st.session_state.enable_fluid_sub = enable_fluid_sub
-                st.session_state.seismic_cmap = seismic_cmap
-                st.session_state.cwt_cmap = cwt_cmap
+                st.session_state.main_cmap = main_cmap
                 st.session_state.diff_cmap = diff_cmap
                 st.session_state.selected_angle = selected_angle
                 st.session_state.azimuth_step = azimuth_step
@@ -984,22 +1005,22 @@ def main():
                     st.session_state.model_params['e2'],
                     st.session_state.model_params['dlt2'],
                     st.session_state.model_params['vp2'],
-                    st.session_state.seismic_cmap
+                    st.session_state.main_cmap
                 )
             
             results = run_modeling(
                 st.session_state.model_params,
                 st.session_state.enable_fluid_sub,
-                st.session_state.seismic_cmap,
+                st.session_state.main_cmap,
                 st.session_state.selected_angle,
                 st.session_state.azimuth_step,
                 st.session_state.freq
             )
             display_results(
                 results,
-                st.session_state.seismic_cmap,
+                st.session_state.main_cmap,
                 st.session_state.diff_cmap,
-                st.session_state.cwt_cmap,
+                st.session_state.main_cmap,  # Same colormap for CWT
                 st.session_state.selected_angle
             )
     
@@ -1088,8 +1109,7 @@ def main():
                         st.session_state.excel_data_processed = True
                         st.session_state.uploaded_file = uploaded_file
                         st.session_state.enable_fluid_sub = enable_fluid_sub
-                        st.session_state.seismic_cmap = seismic_cmap
-                        st.session_state.cwt_cmap = cwt_cmap
+                        st.session_state.main_cmap = main_cmap
                         st.session_state.diff_cmap = diff_cmap
                         st.session_state.selected_angle = selected_angle
                         st.session_state.azimuth_step = azimuth_step
@@ -1135,22 +1155,22 @@ def main():
                             })
                         
                         if st.session_state.show_anisotropy:
-                            pwave_anisotropy_section(params['e2'], params['dlt2'], params['vp2'], st.session_state.seismic_cmap)
+                            pwave_anisotropy_section(params['e2'], params['dlt2'], params['vp2'], st.session_state.main_cmap)
                         
                         # Run modeling
                         results = run_modeling(
                             params,
                             st.session_state.enable_fluid_sub,
-                            st.session_state.seismic_cmap,
+                            st.session_state.main_cmap,
                             st.session_state.selected_angle,
                             st.session_state.azimuth_step,
                             st.session_state.freq
                         )
                         display_results(
                             results,
-                            st.session_state.seismic_cmap,
+                            st.session_state.main_cmap,
                             st.session_state.diff_cmap,
-                            st.session_state.cwt_cmap,
+                            st.session_state.main_cmap,  # Same colormap for CWT
                             st.session_state.selected_angle
                         )
                 
