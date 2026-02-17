@@ -137,18 +137,18 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
     time_samples = results['seismic_orig'][0].shape[0]
     n_azimuths = results['seismic_orig'][0].shape[1]
     
-    # Original Seismic - Horizontal arrangement with 2D traces below
-    st.subheader("Original Seismic - Horizontal Angle Arrangement with Trace Comparisons")
+    # Original Seismic - Horizontal arrangement with reflectivity plots below
+    st.subheader("Original Seismic - Horizontal Angle Arrangement with Reflectivity vs Azimuth")
     
-    # Create subplot figure with 2 rows for each angle (heatmap on top, traces below)
+    # Create subplot figure with 2 rows for each angle (heatmap on top, reflectivity below)
     fig_orig = make_subplots(
         rows=2, cols=n_angles,
         subplot_titles=[f'{angle:.0f}°' for angle in results['incidence_angles']] + 
-                      [f'Traces at {angle:.0f}°' for angle in results['incidence_angles']],
+                      [f'Reflectivity at {angle:.0f}°' for angle in results['incidence_angles']],
         shared_yaxes=False,
-        vertical_spacing=0.12,
-        horizontal_spacing=0.02,
-        row_heights=[0.6, 0.4]
+        vertical_spacing=0.15,
+        horizontal_spacing=0.03,
+        row_heights=[0.5, 0.5]
     )
     
     # Set global vmax for consistent color scaling in heatmaps
@@ -157,15 +157,16 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
         vmax_angle = np.abs(results['seismic_orig'][angle_idx]).max()
         vmax_global = max(vmax_global, vmax_angle)
     
-    # Add heatmaps in top row and trace plots in bottom row
+    # Add heatmaps in top row and reflectivity plots in bottom row
     for angle_idx in range(n_angles):
         seismic_data = results['seismic_orig'][angle_idx]
+        reflectivity_data = results['reflectivity_orig'][angle_idx, :]
         
         # Add heatmap in top row
         fig_orig.add_trace(
             go.Heatmap(
                 z=seismic_data,
-                x=np.linspace(0, 360, n_azimuths),
+                x=results['azimuths'],
                 y=np.arange(time_samples),
                 colorscale=seismic_cmap,
                 zmin=-vmax_global,
@@ -176,27 +177,26 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
             row=1, col=angle_idx+1
         )
         
-        # Add trace comparison in bottom row (show first 5 azimuths as examples)
-        for az_idx in range(0, min(5, n_azimuths)):
-            trace_data = seismic_data[:, az_idx]
-            fig_orig.add_trace(
-                go.Scatter(
-                    x=np.arange(time_samples),
-                    y=trace_data + az_idx * 0.5,  # Offset traces for visibility
-                    mode='lines',
-                    line=dict(width=1),
-                    showlegend=False,
-                    hoverinfo='y',
-                    name=f'Az {results["azimuths"][az_idx]:.0f}°'
-                ),
-                row=2, col=angle_idx+1
-            )
+        # Add reflectivity vs azimuth plot in bottom row
+        fig_orig.add_trace(
+            go.Scatter(
+                x=results['azimuths'],
+                y=reflectivity_data,
+                mode='lines+markers',
+                line=dict(color='blue', width=2),
+                marker=dict(size=4),
+                showlegend=False,
+                name=f'Reflectivity {results["incidence_angles"][angle_idx]:.0f}°'
+            ),
+            row=2, col=angle_idx+1
+        )
         
         # Update axes for top row (heatmaps)
         fig_orig.update_xaxes(
-            title_text="" if angle_idx == n_angles//2 else "",
+            title_text="",
             row=1, col=angle_idx+1,
-            showticklabels=angle_idx == n_angles-1
+            showticklabels=angle_idx == n_angles-1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
@@ -204,36 +204,40 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
         else:
             fig_orig.update_yaxes(showticklabels=False, row=1, col=angle_idx+1)
         
-        # Update axes for bottom row (trace plots)
+        # Update axes for bottom row (reflectivity plots)
         fig_orig.update_xaxes(
-            title_text="Time Sample" if angle_idx == n_angles//2 else "",
+            title_text="Azimuth (deg)" if angle_idx == n_angles//2 else "",
             row=2, col=angle_idx+1,
-            showticklabels=angle_idx == n_angles-1
+            showticklabels=angle_idx == n_angles-1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
-            fig_orig.update_yaxes(title_text="Amplitude (offset)", row=2, col=1)
+            fig_orig.update_yaxes(title_text="Reflectivity", row=2, col=1)
         else:
             fig_orig.update_yaxes(showticklabels=False, row=2, col=angle_idx+1)
+        
+        # Add horizontal line at y=0 for reference in reflectivity plots
+        fig_orig.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5, row=2, col=angle_idx+1)
     
     fig_orig.update_layout(
-        height=800,
-        title_text="Original Seismic - Heatmaps (top) with Selected Traces (bottom)",
+        height=900,
+        title_text="Original Seismic - Heatmaps (top) with Reflectivity vs Azimuth (bottom)",
         showlegend=False
     )
     st.plotly_chart(fig_orig, use_container_width=True)
     
-    # Fluid-Substituted Seismic - Horizontal arrangement with 2D traces below
-    st.subheader("Fluid-Substituted Seismic - Horizontal Angle Arrangement with Trace Comparisons")
+    # Fluid-Substituted Seismic - Horizontal arrangement with reflectivity plots below
+    st.subheader("Fluid-Substituted Seismic - Horizontal Angle Arrangement with Reflectivity vs Azimuth")
     
     fig_sub = make_subplots(
         rows=2, cols=n_angles,
         subplot_titles=[f'{angle:.0f}°' for angle in results['incidence_angles']] + 
-                      [f'Traces at {angle:.0f}°' for angle in results['incidence_angles']],
+                      [f'Reflectivity at {angle:.0f}°' for angle in results['incidence_angles']],
         shared_yaxes=False,
-        vertical_spacing=0.12,
-        horizontal_spacing=0.02,
-        row_heights=[0.6, 0.4]
+        vertical_spacing=0.15,
+        horizontal_spacing=0.03,
+        row_heights=[0.5, 0.5]
     )
     
     # Set global vmax for consistent color scaling
@@ -242,15 +246,16 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
         vmax_angle = np.abs(results['seismic_sub'][angle_idx]).max()
         vmax_global_sub = max(vmax_global_sub, vmax_angle)
     
-    # Add heatmaps in top row and trace plots in bottom row
+    # Add heatmaps in top row and reflectivity plots in bottom row
     for angle_idx in range(n_angles):
         seismic_data = results['seismic_sub'][angle_idx]
+        reflectivity_data = results['reflectivity_sub'][angle_idx, :]
         
         # Add heatmap in top row
         fig_sub.add_trace(
             go.Heatmap(
                 z=seismic_data,
-                x=np.linspace(0, 360, n_azimuths),
+                x=results['azimuths'],
                 y=np.arange(time_samples),
                 colorscale=seismic_cmap,
                 zmin=-vmax_global_sub,
@@ -261,26 +266,26 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
             row=1, col=angle_idx+1
         )
         
-        # Add trace comparison in bottom row (show first 5 azimuths as examples)
-        for az_idx in range(0, min(5, n_azimuths)):
-            trace_data = seismic_data[:, az_idx]
-            fig_sub.add_trace(
-                go.Scatter(
-                    x=np.arange(time_samples),
-                    y=trace_data + az_idx * 0.5,  # Offset traces for visibility
-                    mode='lines',
-                    line=dict(width=1),
-                    showlegend=False,
-                    hoverinfo='y'
-                ),
-                row=2, col=angle_idx+1
-            )
+        # Add reflectivity vs azimuth plot in bottom row
+        fig_sub.add_trace(
+            go.Scatter(
+                x=results['azimuths'],
+                y=reflectivity_data,
+                mode='lines+markers',
+                line=dict(color='red', width=2),
+                marker=dict(size=4),
+                showlegend=False,
+                name=f'Reflectivity {results["incidence_angles"][angle_idx]:.0f}°'
+            ),
+            row=2, col=angle_idx+1
+        )
         
         # Update axes for top row (heatmaps)
         fig_sub.update_xaxes(
-            title_text="" if angle_idx == n_angles//2 else "",
+            title_text="",
             row=1, col=angle_idx+1,
-            showticklabels=angle_idx == n_angles-1
+            showticklabels=angle_idx == n_angles-1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
@@ -288,36 +293,40 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
         else:
             fig_sub.update_yaxes(showticklabels=False, row=1, col=angle_idx+1)
         
-        # Update axes for bottom row (trace plots)
+        # Update axes for bottom row (reflectivity plots)
         fig_sub.update_xaxes(
-            title_text="Time Sample" if angle_idx == n_angles//2 else "",
+            title_text="Azimuth (deg)" if angle_idx == n_angles//2 else "",
             row=2, col=angle_idx+1,
-            showticklabels=angle_idx == n_angles-1
+            showticklabels=angle_idx == n_angles-1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
-            fig_sub.update_yaxes(title_text="Amplitude (offset)", row=2, col=1)
+            fig_sub.update_yaxes(title_text="Reflectivity", row=2, col=1)
         else:
             fig_sub.update_yaxes(showticklabels=False, row=2, col=angle_idx+1)
+        
+        # Add horizontal line at y=0 for reference in reflectivity plots
+        fig_sub.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5, row=2, col=angle_idx+1)
     
     fig_sub.update_layout(
-        height=800,
-        title_text="Fluid-Substituted Seismic - Heatmaps (top) with Selected Traces (bottom)",
+        height=900,
+        title_text="Fluid-Substituted Seismic - Heatmaps (top) with Reflectivity vs Azimuth (bottom)",
         showlegend=False
     )
     st.plotly_chart(fig_sub, use_container_width=True)
     
-    # Difference plots - Horizontal arrangement with 2D traces below
-    st.subheader("Seismic Difference - Horizontal Angle Arrangement with Trace Comparisons")
+    # Difference plots - Horizontal arrangement with reflectivity difference below
+    st.subheader("Seismic Difference - Horizontal Angle Arrangement with Reflectivity Difference")
     
     fig_diff = make_subplots(
         rows=2, cols=n_angles,
         subplot_titles=[f'{angle:.0f}°' for angle in results['incidence_angles']] + 
-                      [f'Diff Traces at {angle:.0f}°' for angle in results['incidence_angles']],
+                      [f'Reflectivity Diff at {angle:.0f}°' for angle in results['incidence_angles']],
         shared_yaxes=False,
-        vertical_spacing=0.12,
-        horizontal_spacing=0.02,
-        row_heights=[0.6, 0.4]
+        vertical_spacing=0.15,
+        horizontal_spacing=0.03,
+        row_heights=[0.5, 0.5]
     )
     
     # Set global vmax for consistent color scaling
@@ -329,15 +338,20 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
         vmax_angle = np.abs(diff_data).max()
         vmax_global_diff = max(vmax_global_diff, vmax_angle)
     
-    # Add heatmaps in top row and trace plots in bottom row
+    # Calculate reflectivity difference
+    reflectivity_diff = results['reflectivity_sub'] - results['reflectivity_orig']
+    max_reflectivity_diff = np.max(np.abs(reflectivity_diff))
+    
+    # Add heatmaps in top row and reflectivity difference plots in bottom row
     for angle_idx in range(n_angles):
         diff_data = diff_data_all[angle_idx]
+        reflectivity_diff_data = reflectivity_diff[angle_idx, :]
         
         # Add heatmap in top row
         fig_diff.add_trace(
             go.Heatmap(
                 z=diff_data,
-                x=np.linspace(0, 360, n_azimuths),
+                x=results['azimuths'],
                 y=np.arange(time_samples),
                 colorscale=diff_cmap,
                 zmin=-vmax_global_diff,
@@ -348,26 +362,26 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
             row=1, col=angle_idx+1
         )
         
-        # Add trace comparison in bottom row (show first 5 azimuths as examples)
-        for az_idx in range(0, min(5, n_azimuths)):
-            trace_data = diff_data[:, az_idx]
-            fig_diff.add_trace(
-                go.Scatter(
-                    x=np.arange(time_samples),
-                    y=trace_data + az_idx * 0.2,  # Offset traces for visibility
-                    mode='lines',
-                    line=dict(width=1),
-                    showlegend=False,
-                    hoverinfo='y'
-                ),
-                row=2, col=angle_idx+1
-            )
+        # Add reflectivity difference vs azimuth plot in bottom row
+        fig_diff.add_trace(
+            go.Scatter(
+                x=results['azimuths'],
+                y=reflectivity_diff_data,
+                mode='lines+markers',
+                line=dict(color='purple', width=2),
+                marker=dict(size=4),
+                showlegend=False,
+                name=f'Reflectivity Diff {results["incidence_angles"][angle_idx]:.0f}°'
+            ),
+            row=2, col=angle_idx+1
+        )
         
         # Update axes for top row (heatmaps)
         fig_diff.update_xaxes(
-            title_text="" if angle_idx == n_angles//2 else "",
+            title_text="",
             row=1, col=angle_idx+1,
-            showticklabels=angle_idx == n_angles-1
+            showticklabels=angle_idx == n_angles-1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
@@ -375,21 +389,25 @@ def plot_horizontal_angles_seismic_plotly(results, seismic_cmap, diff_cmap):
         else:
             fig_diff.update_yaxes(showticklabels=False, row=1, col=angle_idx+1)
         
-        # Update axes for bottom row (trace plots)
+        # Update axes for bottom row (reflectivity difference plots)
         fig_diff.update_xaxes(
-            title_text="Time Sample" if angle_idx == n_angles//2 else "",
+            title_text="Azimuth (deg)" if angle_idx == n_angles//2 else "",
             row=2, col=angle_idx+1,
-            showticklabels=angle_idx == n_angles-1
+            showticklabels=angle_idx == n_angles-1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
-            fig_diff.update_yaxes(title_text="Amplitude Diff", row=2, col=1)
+            fig_diff.update_yaxes(title_text="Reflectivity Diff", row=2, col=1)
         else:
             fig_diff.update_yaxes(showticklabels=False, row=2, col=angle_idx+1)
+        
+        # Add horizontal line at y=0 for reference in reflectivity difference plots
+        fig_diff.add_hline(y=0, line_dash="dash", line_color="gray", opacity=0.5, row=2, col=angle_idx+1)
     
     fig_diff.update_layout(
-        height=800,
-        title_text="Seismic Difference - Heatmaps (top) with Selected Traces (bottom)",
+        height=900,
+        title_text="Seismic Difference - Heatmaps (top) with Reflectivity Difference vs Azimuth (bottom)",
         showlegend=False
     )
     st.plotly_chart(fig_diff, use_container_width=True)
@@ -461,7 +479,7 @@ def plot_horizontal_angles_cwt_plotly(results, cwt_scale, cwt_cmap, diff_cmap):
         fig_cwt_orig.add_trace(
             go.Heatmap(
                 z=cwt_data,
-                x=np.linspace(0, 360, n_azimuths),
+                x=results['azimuths'],
                 y=np.arange(time_samples),
                 colorscale=cwt_cmap,
                 zmin=0,
@@ -475,7 +493,8 @@ def plot_horizontal_angles_cwt_plotly(results, cwt_scale, cwt_cmap, diff_cmap):
         # Update axes
         fig_cwt_orig.update_xaxes(
             title_text="Azimuth (deg)" if angle_idx == n_angles//2 else "",
-            row=1, col=angle_idx+1
+            row=1, col=angle_idx+1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
@@ -513,7 +532,7 @@ def plot_horizontal_angles_cwt_plotly(results, cwt_scale, cwt_cmap, diff_cmap):
         fig_cwt_sub.add_trace(
             go.Heatmap(
                 z=cwt_data,
-                x=np.linspace(0, 360, n_azimuths),
+                x=results['azimuths'],
                 y=np.arange(time_samples),
                 colorscale=cwt_cmap,
                 zmin=0,
@@ -527,7 +546,8 @@ def plot_horizontal_angles_cwt_plotly(results, cwt_scale, cwt_cmap, diff_cmap):
         # Update axes
         fig_cwt_sub.update_xaxes(
             title_text="Azimuth (deg)" if angle_idx == n_angles//2 else "",
-            row=1, col=angle_idx+1
+            row=1, col=angle_idx+1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
@@ -569,7 +589,7 @@ def plot_horizontal_angles_cwt_plotly(results, cwt_scale, cwt_cmap, diff_cmap):
         fig_cwt_diff.add_trace(
             go.Heatmap(
                 z=diff_data,
-                x=np.linspace(0, 360, n_azimuths),
+                x=results['azimuths'],
                 y=np.arange(time_samples),
                 colorscale=diff_cmap,
                 zmin=-vmax_global_diff,
@@ -583,7 +603,8 @@ def plot_horizontal_angles_cwt_plotly(results, cwt_scale, cwt_cmap, diff_cmap):
         # Update axes
         fig_cwt_diff.update_xaxes(
             title_text="Azimuth (deg)" if angle_idx == n_angles//2 else "",
-            row=1, col=angle_idx+1
+            row=1, col=angle_idx+1,
+            tickangle=-45
         )
         
         if angle_idx == 0:
@@ -1235,7 +1256,7 @@ def main():
             
             if st.button("Run Modeling"):
                 st.session_state.show_results = True
-                st.session_state.show_anisotropy_section = show_anisotropy  # Store the checkbox state
+                st.session_state.show_anisotropy_section = show_anisotropy
                 st.session_state.model_params = params
                 st.session_state.enable_fluid_sub = enable_fluid_sub
                 st.session_state.main_cmap = main_cmap
@@ -1270,7 +1291,7 @@ def main():
                 results,
                 st.session_state.main_cmap,
                 st.session_state.diff_cmap,
-                st.session_state.main_cmap,  # Same colormap for CWT
+                st.session_state.main_cmap,
                 st.session_state.selected_angle
             )
     
@@ -1357,7 +1378,7 @@ def main():
                     
                     if st.button("Run Modeling with Excel Data"):
                         st.session_state.excel_data_processed = True
-                        st.session_state.show_anisotropy_section = show_anisotropy  # Store the checkbox state
+                        st.session_state.show_anisotropy_section = show_anisotropy
                         st.session_state.uploaded_file = uploaded_file
                         st.session_state.enable_fluid_sub = enable_fluid_sub
                         st.session_state.main_cmap = main_cmap
@@ -1423,7 +1444,7 @@ def main():
                             results,
                             st.session_state.main_cmap,
                             st.session_state.diff_cmap,
-                            st.session_state.main_cmap,  # Same colormap for CWT
+                            st.session_state.main_cmap,
                             st.session_state.selected_angle
                         )
                 
