@@ -923,6 +923,10 @@ def extract_thomsen_values(results_df: pd.DataFrame, depth: float, tolerance: fl
 def main():
     st.markdown('<h1 class="main-header">📊 Fracture Model Analysis - Thomsen Parameters</h1>', unsafe_allow_html=True)
     
+    # Initialize session state for results
+    if 'results' not in st.session_state:
+        st.session_state.results = None
+    
     # Sidebar
     with st.sidebar:
         st.markdown('<h2 class="sub-header">⚙️ Configuration</h2>', unsafe_allow_html=True)
@@ -1029,102 +1033,101 @@ DEPTH,VP,VS,RHO
                     )
                     
                     # Store results in session state
-                    st.session_state['results'] = results
+                    st.session_state.results = results
                     
-                    # Display results
-                    st.markdown('<h2 class="sub-header">📈 Well Log Analysis Results</h2>', 
-                               unsafe_allow_html=True)
-                    
-                    # Plot well results
-                    fig1 = plot_well_results_plotly(results)
-                    st.plotly_chart(fig1, use_container_width=True)
-                    
-                    # Model comparison using average properties
-                    st.markdown('<h2 class="sub-header">🔄 Model Comparison</h2>', 
-                               unsafe_allow_html=True)
-                    
-                    avg_vp = results['VP'].mean()
-                    avg_vs = results['VS'].mean()
-                    avg_rho = results['RHO'].mean()
-                    
-                    st.info(f"Using average properties: VP={avg_vp:.0f} m/s, VS={avg_vs:.0f} m/s, RHO={avg_rho:.0f} kg/m³")
-                    
-                    model_avg = FractureModelThomsen(avg_vp, avg_vs, avg_rho)
-                    crack_density_range = np.linspace(0.01, 0.15, 20)
-                    fig2 = plot_model_comparison_plotly(model_avg, crack_density_range)
-                    st.plotly_chart(fig2, use_container_width=True)
-                    
-                    # Extract values at specific depths
-                    st.markdown('<h2 class="sub-header">🎯 Extract Values at Depth</h2>', 
-                               unsafe_allow_html=True)
-                    
-                    col1, col2 = st.columns([1, 2])
-                    with col1:
-                        extract_depth = st.number_input(
-                            "Enter depth to extract values (m)",
-                            float(results['DEPTH'].min()),
-                            float(results['DEPTH'].max()),
-                            float(results['DEPTH'].mean())
-                        )
-                        
-                        if st.button("Extract Values"):
-                            values = extract_thomsen_values(results, extract_depth)
-                            
-                            with col2:
-                                st.markdown(f"### Thomsen Parameters at {values['depth']:.1f} m")
-                                
-                                tab1, tab2, tab3, tab4 = st.tabs(["Hudson", "Linear Slip", "Orthorhombic", "Monoclinic"])
-                                
-                                with tab1:
-                                    st.write(f"**ε** = {values['hudson']['epsilon']:.6f}")
-                                    st.write(f"**γ** = {values['hudson']['gamma']:.6f}")
-                                    st.write(f"**δ** = {values['hudson']['delta']:.6f}")
-                                
-                                with tab2:
-                                    st.write(f"**ε** = {values['linear_slip']['epsilon']:.6f}")
-                                    st.write(f"**γ** = {values['linear_slip']['gamma']:.6f}")
-                                    st.write(f"**δ** = {values['linear_slip']['delta']:.6f}")
-                                
-                                with tab3:
-                                    st.write(f"**ε₁** = {values['orthorhombic']['epsilon_1']:.6f}")
-                                    st.write(f"**ε₂** = {values['orthorhombic']['epsilon_2']:.6f}")
-                                    st.write(f"**γ₁** = {values['orthorhombic']['gamma_1']:.6f}")
-                                    st.write(f"**γ₂** = {values['orthorhombic']['gamma_2']:.6f}")
-                                
-                                with tab4:
-                                    st.write(f"**εₓ** = {values['monoclinic']['epsilon_x']:.6f}")
-                                    st.write(f"**εᵧ** = {values['monoclinic']['epsilon_y']:.6f}")
-                                    st.write(f"**γₓ** = {values['monoclinic']['gamma_x']:.6f}")
-                                    st.write(f"**γᵧ** = {values['monoclinic']['gamma_y']:.6f}")
-                    
-                    # Download results
-                    st.markdown('<h2 class="sub-header">💾 Download Results</h2>', 
-                               unsafe_allow_html=True)
-                    
-                    csv = results.to_csv(index=False)
-                    st.download_button(
-                        label="📥 Download Results as CSV",
-                        data=csv,
-                        file_name="fracture_model_results.csv",
-                        mime="text/csv"
-                    )
-                    
-                    # Summary statistics
-                    # Summary statistics
-                    with st.expander("📊 View Summary Statistics"):
-                        stats_cols = ['HUDSON_EPS', 'LS_EPS', 'ORTHO_EPS1', 'ORTHO_EPS2', 
-                                     'MONO_EPSX', 'MONO_EPSY', 'HUDSON_GAM', 'LS_GAM']
-                        stats = results[stats_cols].describe()
-                        st.dataframe(stats)
+                    # Force a rerun to display results
+                    st.rerun()
         else:
             st.error("Start depth must be less than end depth")
     
-    # Display previous results if they exist in session state
-    if 'results' in st.session_state:
-        st.markdown('<h2 class="sub-header">📈 Previous Analysis Results</h2>', 
+    # Display results if they exist in session state
+    if st.session_state.results is not None:
+        results = st.session_state.results
+        
+        st.markdown('<h2 class="sub-header">📈 Well Log Analysis Results</h2>', 
                    unsafe_allow_html=True)
-        fig1 = plot_well_results_plotly(st.session_state['results'])
+        
+        # Plot well results
+        fig1 = plot_well_results_plotly(results)
         st.plotly_chart(fig1, use_container_width=True)
+        
+        # Model comparison using average properties
+        st.markdown('<h2 class="sub-header">🔄 Model Comparison</h2>', 
+                   unsafe_allow_html=True)
+        
+        avg_vp = results['VP'].mean()
+        avg_vs = results['VS'].mean()
+        avg_rho = results['RHO'].mean()
+        
+        st.info(f"Using average properties: VP={avg_vp:.0f} m/s, VS={avg_vs:.0f} m/s, RHO={avg_rho:.0f} kg/m³")
+        
+        model_avg = FractureModelThomsen(avg_vp, avg_vs, avg_rho)
+        crack_density_range = np.linspace(0.01, 0.15, 20)
+        fig2 = plot_model_comparison_plotly(model_avg, crack_density_range)
+        st.plotly_chart(fig2, use_container_width=True)
+        
+        # Extract values at specific depths
+        st.markdown('<h2 class="sub-header">🎯 Extract Values at Depth</h2>', 
+                   unsafe_allow_html=True)
+        
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            extract_depth = st.number_input(
+                "Enter depth to extract values (m)",
+                float(results['DEPTH'].min()),
+                float(results['DEPTH'].max()),
+                float(results['DEPTH'].mean()),
+                key="extract_depth_input"
+            )
+            
+            if st.button("Extract Values", key="extract_button"):
+                values = extract_thomsen_values(results, extract_depth)
+                
+                with col2:
+                    st.markdown(f"### Thomsen Parameters at {values['depth']:.1f} m")
+                    
+                    tab1, tab2, tab3, tab4 = st.tabs(["Hudson", "Linear Slip", "Orthorhombic", "Monoclinic"])
+                    
+                    with tab1:
+                        st.write(f"**ε** = {values['hudson']['epsilon']:.6f}")
+                        st.write(f"**γ** = {values['hudson']['gamma']:.6f}")
+                        st.write(f"**δ** = {values['hudson']['delta']:.6f}")
+                    
+                    with tab2:
+                        st.write(f"**ε** = {values['linear_slip']['epsilon']:.6f}")
+                        st.write(f"**γ** = {values['linear_slip']['gamma']:.6f}")
+                        st.write(f"**δ** = {values['linear_slip']['delta']:.6f}")
+                    
+                    with tab3:
+                        st.write(f"**ε₁** = {values['orthorhombic']['epsilon_1']:.6f}")
+                        st.write(f"**ε₂** = {values['orthorhombic']['epsilon_2']:.6f}")
+                        st.write(f"**γ₁** = {values['orthorhombic']['gamma_1']:.6f}")
+                        st.write(f"**γ₂** = {values['orthorhombic']['gamma_2']:.6f}")
+                    
+                    with tab4:
+                        st.write(f"**εₓ** = {values['monoclinic']['epsilon_x']:.6f}")
+                        st.write(f"**εᵧ** = {values['monoclinic']['epsilon_y']:.6f}")
+                        st.write(f"**γₓ** = {values['monoclinic']['gamma_x']:.6f}")
+                        st.write(f"**γᵧ** = {values['monoclinic']['gamma_y']:.6f}")
+        
+        # Download results
+        st.markdown('<h2 class="sub-header">💾 Download Results</h2>', 
+                   unsafe_allow_html=True)
+        
+        csv = results.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Results as CSV",
+            data=csv,
+            file_name="fracture_model_results.csv",
+            mime="text/csv"
+        )
+        
+        # Summary statistics
+        with st.expander("📊 View Summary Statistics"):
+            stats_cols = ['HUDSON_EPS', 'LS_EPS', 'ORTHO_EPS1', 'ORTHO_EPS2', 
+                         'MONO_EPSX', 'MONO_EPSY', 'HUDSON_GAM', 'LS_GAM']
+            stats = results[stats_cols].describe()
+            st.dataframe(stats)
 
 
 if __name__ == "__main__":
