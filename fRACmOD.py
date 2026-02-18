@@ -6,6 +6,7 @@ from plotly.subplots import make_subplots
 from scipy.linalg import inv
 import os
 from io import StringIO
+from typing import List, Dict, Tuple, Optional
 
 # Page configuration
 st.set_page_config(
@@ -40,6 +41,13 @@ st.markdown("""
         background-color: white;
         border-radius: 0.5rem;
         padding: 0.5rem;
+    }
+    .metric-card {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -90,6 +98,7 @@ class FractureModelThomsen:
         
         M = np.zeros((6, 6))
         
+        # Fill the transformation matrix
         M[0, 0] = nx**2
         M[0, 1] = ny**2
         M[0, 2] = nz**2
@@ -144,7 +153,7 @@ class FractureModelThomsen:
         # Initialize total fracture compliance
         S_frac_total = np.zeros((6, 6))
         
-        for i, fracture in enumerate(fracture_sets):
+        for fracture in fracture_sets:
             ZN = fracture['normal_compliance']
             ZT = fracture['shear_compliance']
             azimuth = np.radians(fracture['azimuth'])
@@ -216,8 +225,10 @@ class FractureModelThomsen:
             delta_2 = ((C23 + C44)**2 - (C33 - C44)**2) / (2 * C33 * (C33 - C44)) if abs(C33 - C44) > 1e-10 else 0
             delta_3 = ((C12 + C66)**2 - (C11 - C66)**2) / (2 * C11 * (C11 - C66)) if abs(C11 - C66) > 1e-10 else 0
             
-            return {'symmetry': 'ORTHORHOMBIC', 'epsilon_1': epsilon_1, 'epsilon_2': epsilon_2,
-                    'gamma_1': gamma_1, 'gamma_2': gamma_2, 'delta_1': delta_1, 'delta_2': delta_2, 'delta_3': delta_3}
+            return {'symmetry': 'ORTHORHOMBIC', 
+                    'epsilon_1': epsilon_1, 'epsilon_2': epsilon_2,
+                    'gamma_1': gamma_1, 'gamma_2': gamma_2, 
+                    'delta_1': delta_1, 'delta_2': delta_2, 'delta_3': delta_3}
         
         else:  # MONOCLINIC
             epsilon_x = (C11 - C33) / (2 * C33) if C33 != 0 else 0
@@ -227,8 +238,10 @@ class FractureModelThomsen:
             zeta_1 = C[0, 4] / C33 if abs(C33) > 1e-10 else 0
             zeta_2 = C[1, 3] / C44 if abs(C44) > 1e-10 else 0
             
-            return {'symmetry': 'MONOCLINIC', 'epsilon_x': epsilon_x, 'epsilon_y': epsilon_y,
-                    'gamma_x': gamma_x, 'gamma_y': gamma_y, 'zeta_1': zeta_1, 'zeta_2': zeta_2}
+            return {'symmetry': 'MONOCLINIC', 
+                    'epsilon_x': epsilon_x, 'epsilon_y': epsilon_y,
+                    'gamma_x': gamma_x, 'gamma_y': gamma_y, 
+                    'zeta_1': zeta_1, 'zeta_2': zeta_2}
     
     def hudson_model(self, crack_density: float, aspect_ratio: float = 0.01, 
                     fluid_content: str = 'dry') -> Dict:
@@ -396,6 +409,7 @@ def load_well_data(uploaded_file) -> pd.DataFrame:
 
 def generate_example_data():
     """Generate synthetic well log data for demonstration"""
+    np.random.seed(42)  # For reproducible results
     depth = np.arange(1000, 2000, 2)
     vp = 3000 + 200 * np.sin(depth/200) + 50 * np.random.randn(len(depth))
     vs = vp / 1.8 + 20 * np.random.randn(len(depth))
@@ -416,8 +430,7 @@ def analyze_well_with_fracture_models(df: pd.DataFrame,
                                       fracture_azimuth1: float = 0.0,
                                       fracture_azimuth2: float = 90.0,
                                       fracture_azimuth_mono: float = 45.0,
-                                      sample_every: int = 1,
-                                      progress_callback=None) -> pd.DataFrame:
+                                      sample_every: int = 1) -> pd.DataFrame:
     """
     Apply fracture models to entire well log
     """
@@ -464,14 +477,12 @@ def analyze_well_with_fracture_models(df: pd.DataFrame,
         'MONO_ZETA2': np.zeros(n_samples)
     }
     
-    # Process each sample
+    # Create progress bar
     progress_bar = st.progress(0)
     status_text = st.empty()
     
+    # Process each sample
     for i in range(n_samples):
-        if progress_callback:
-            progress_callback(i, n_samples)
-        
         # Update progress
         if i % max(1, n_samples // 100) == 0:
             progress_bar.progress(i / n_samples)
@@ -1006,13 +1017,6 @@ DEPTH,VP,VS,RHO
             # Run analysis button
             if st.button("🚀 Run Analysis", type="primary"):
                 with st.spinner("Processing data..."):
-                    # Create progress placeholder
-                    progress_placeholder = st.empty()
-                    
-                    def update_progress(current, total):
-                        progress_placeholder.progress(current / total, 
-                                                      text=f"Processing: {current}/{total}")
-                    
                     # Run analysis
                     results = analyze_well_with_fracture_models(
                         df_selected,
@@ -1021,11 +1025,11 @@ DEPTH,VP,VS,RHO
                         fracture_azimuth1=fracture_azimuth1,
                         fracture_azimuth2=fracture_azimuth2,
                         fracture_azimuth_mono=fracture_azimuth_mono,
-                        sample_every=sample_every,
-                        progress_callback=update_progress
+                        sample_every=sample_every
                     )
                     
-                    progress_placeholder.empty()
+                    # Store results in session state
+                    st.session_state['results'] = results
                     
                     # Display results
                     st.markdown('<h2 class="sub-header">📈 Well Log Analysis Results</h2>', 
@@ -1113,6 +1117,13 @@ DEPTH,VP,VS,RHO
                         st.dataframe(stats)
         else:
             st.error("Start depth must be less than end depth")
+        
+        # Display previous results if they exist in session state
+        elif 'results' in st.session_state:
+            st.markdown('<h2 class="sub-header">📈 Previous Analysis Results</h2>', 
+                       unsafe_allow_html=True)
+            fig1 = plot_well_results_plotly(st.session_state['results'])
+            st.plotly_chart(fig1, use_container_width=True)
 
 
 if __name__ == "__main__":
