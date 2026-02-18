@@ -1110,6 +1110,7 @@ DEPTH,VP,VS,RHO
                     )
                     
                     # Summary statistics
+                    # Summary statistics
                     with st.expander("📊 View Summary Statistics"):
                         stats_cols = ['HUDSON_EPS', 'LS_EPS', 'ORTHO_EPS1', 'ORTHO_EPS2', 
                                      'MONO_EPSX', 'MONO_EPSY', 'HUDSON_GAM', 'LS_GAM']
@@ -1117,13 +1118,13 @@ DEPTH,VP,VS,RHO
                         st.dataframe(stats)
         else:
             st.error("Start depth must be less than end depth")
-        
-        # Display previous results if they exist in session state
-        elif 'results' in st.session_state:
-            st.markdown('<h2 class="sub-header">📈 Previous Analysis Results</h2>', 
-                       unsafe_allow_html=True)
-            fig1 = plot_well_results_plotly(st.session_state['results'])
-            st.plotly_chart(fig1, use_container_width=True)
+    
+    # Display previous results if they exist in session state
+    if 'results' in st.session_state:
+        st.markdown('<h2 class="sub-header">📈 Previous Analysis Results</h2>', 
+                   unsafe_allow_html=True)
+        fig1 = plot_well_results_plotly(st.session_state['results'])
+        st.plotly_chart(fig1, use_container_width=True)
 
 
 if __name__ == "__main__":
