@@ -3020,7 +3020,7 @@ def create_figure2_plot(data, model_params, figsize=(16, 10)):
 
 def run_vti_modeling_app():
     """Main function for Anisotropic Model Analysis App (App 3)"""
-    st.markdown('<h1 class="main-header">🌍 VTI Model Analysis</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🌍 Anisotropic Model Analysis</h1>', unsafe_allow_html=True)
     st.markdown('<h2 class="sub-header">Schoenberg Linear Slip Model for Fractured Media</h2>', unsafe_allow_html=True)
     
     # Initialize session state for parameters
