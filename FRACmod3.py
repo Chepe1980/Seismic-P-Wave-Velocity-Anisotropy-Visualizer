@@ -3019,7 +3019,7 @@ def create_figure2_plot(data, model_params, figsize=(16, 10)):
     return fig
 
 def run_vti_modeling_app():
-    """Main function for VTI Model Analysis App (App 3)"""
+    """Main function for Anisotropic Model Analysis App (App 3)"""
     st.markdown('<h1 class="main-header">🌍 VTI Model Analysis</h1>', unsafe_allow_html=True)
     st.markdown('<h2 class="sub-header">Schoenberg Linear Slip Model for Fractured Media</h2>', unsafe_allow_html=True)
     
@@ -3462,7 +3462,7 @@ def main():
     tab1, tab2, tab3 = st.tabs([
         "📈 AVAZ Modeling with Fluid Substitution", 
         "🔬 Fracture Model Analysis (Thomsen Parameters)",
-        "🌍 VTI Model Analysis (Schoenberg Linear Slip)"
+        "🌍 Anisotropic Model Analysis (Schoenberg Linear Slip)"
     ])
     
     with tab1:
