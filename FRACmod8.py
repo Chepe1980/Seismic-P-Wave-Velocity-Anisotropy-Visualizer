@@ -1970,17 +1970,37 @@ def load_well_data(uploaded_file) -> pd.DataFrame:
         DataFrame with well log data
     """
     try:
-        # Reset file pointer
-        uploaded_file.seek(0)
+        # Reset file pointer to beginning
+        if uploaded_file is not None:
+            uploaded_file.seek(0)
         
-        # Read CSV
+        # Read CSV with more robust parsing
         df = pd.read_csv(uploaded_file)
         
-        # Check for required columns (case-insensitive)
+        # Check if dataframe is empty
+        if df.empty:
+            st.error("The uploaded CSV file is empty.")
+            return None
+        
+        # Convert column names to uppercase for consistency and strip whitespace
         df.columns = df.columns.str.upper().str.strip()
         
+        # Display available columns for debugging (optional)
+        # st.write("Available columns in CSV:", list(df.columns))
+        
+        # Check for required columns (case-insensitive)
         required_cols = ['DEPTH', 'VP', 'VS', 'RHO']
-        missing_cols = [col for col in required_cols if col not in df.columns]
+        missing_cols = []
+        
+        # Check each required column
+        for req_col in required_cols:
+            found = False
+            for df_col in df.columns:
+                if req_col == df_col or req_col in df_col:
+                    found = True
+                    break
+            if not found:
+                missing_cols.append(req_col)
         
         if missing_cols:
             st.error(f"Missing required columns: {missing_cols}")
@@ -1989,7 +2009,8 @@ def load_well_data(uploaded_file) -> pd.DataFrame:
         
         # Convert to numeric
         for col in required_cols:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
         
         # Remove rows with invalid data
         df = df.dropna(subset=required_cols)
@@ -2000,7 +2021,8 @@ def load_well_data(uploaded_file) -> pd.DataFrame:
             return None
         
         # Reset file pointer for future use
-        uploaded_file.seek(0)
+        if uploaded_file is not None:
+            uploaded_file.seek(0)
         
         return df
         
