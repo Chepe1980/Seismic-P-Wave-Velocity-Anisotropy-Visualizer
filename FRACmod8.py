@@ -3157,6 +3157,8 @@ def run_vti_modeling_app():
         df_filtered = None
         if data_source == "Upload CSV File" and uploaded_file is not None:
             try:
+                # Reset file pointer
+                uploaded_file.seek(0)
                 df_full = load_well_data(uploaded_file)
                 if df_full is not None:
                     depth_min_full = float(df_full['DEPTH'].min())
@@ -3187,7 +3189,7 @@ def run_vti_modeling_app():
                     # Reset file pointer
                     uploaded_file.seek(0)
             except Exception as e:
-                st.error(f"Error reading file: {e}")
+                st.error(f"Error reading CSV file: {str(e)}")
                 df_filtered = None
         
         st.markdown("---")
