@@ -1280,6 +1280,8 @@ def run_avaz_modeling_app():
         st.session_state.show_results = False
     if 'show_anisotropy_section' not in st.session_state:
         st.session_state.show_anisotropy_section = False
+    if 'avaz_results' not in st.session_state:
+        st.session_state.avaz_results = None
     
     # Modeling mode selection
     modeling_mode = st.sidebar.radio(
@@ -1385,6 +1387,10 @@ def run_avaz_modeling_app():
                 st.session_state.azimuth_step,
                 st.session_state.freq
             )
+            
+            # STORE RESULTS IN SESSION STATE FOR TAB 4
+            st.session_state.avaz_results = results
+            
             display_results_plotly(
                 results,
                 st.session_state.main_cmap,
@@ -1547,6 +1553,10 @@ def run_avaz_modeling_app():
                             st.session_state.azimuth_step,
                             st.session_state.freq
                         )
+                        
+                        # STORE RESULTS IN SESSION STATE FOR TAB 4
+                        st.session_state.avaz_results = results
+                        
                         display_results_plotly(
                             results,
                             st.session_state.main_cmap,
@@ -3572,7 +3582,6 @@ class ShearWaveSplittingAnalyzer:
         delta_vs = 100 * (vs_fast - vs_slow) / ((vs_fast + vs_slow) / 2)
         return max(delta_vs, 0)
 
-
 def convert_avaz_results_to_sws(avaz_results, source_loc=None, n_receivers=50):
     """
     Convert AVAZ modeling results to synthetic SWS measurements
@@ -3586,6 +3595,10 @@ def convert_avaz_results_to_sws(avaz_results, source_loc=None, n_receivers=50):
     Returns:
         DataFrame with SWS measurements for Tab 4
     """
+    if avaz_results is None:
+        st.error("No AVAZ results provided!")
+        return pd.DataFrame()
+    
     if source_loc is None:
         source_loc = np.array([100, 150, 140])  # From thesis Chapter 4
     
@@ -3619,7 +3632,6 @@ def convert_avaz_results_to_sws(avaz_results, source_loc=None, n_receivers=50):
     # Use the reflectivity patterns to determine fracture strike
     # The fracture strike should be where reflectivity is maximum
     reflectivity_orig = avaz_results['reflectivity_orig']
-    reflectivity_sub = avaz_results['reflectivity_sub']
     
     # Average over incidence angles to get a robust estimate
     avg_reflectivity = np.mean(reflectivity_orig, axis=0)
@@ -3630,17 +3642,23 @@ def convert_avaz_results_to_sws(avaz_results, source_loc=None, n_receivers=50):
     
     # Calculate anisotropy strength from reflectivity variation
     reflectivity_range = np.max(avg_reflectivity) - np.min(avg_reflectivity)
-    anisotropy_strength = reflectivity_range * 10  # Scale factor to get reasonable δVs
+    anisotropy_strength = max(reflectivity_range * 10, 1.0)  # Scale factor, minimum 1%
     
     # Generate measurements for multiple "events" (using different incidence angles)
     n_angles = len(avaz_results['incidence_angles'])
+    n_events = min(10, n_angles)
     
-    for event_idx in range(min(10, n_angles)):
+    for event_idx in range(n_events):
         # Use reflectivity for this incidence angle
         ref_angle = reflectivity_orig[event_idx, :]
         
-        # Normalize to get relative anisotropy
-        ref_norm = (ref_angle - np.min(ref_angle)) / (np.max(ref_angle) - np.min(ref_angle) + 1e-10)
+        # Normalize to get relative anisotropy (avoid division by zero)
+        ref_min = np.min(ref_angle)
+        ref_max = np.max(ref_angle)
+        if ref_max > ref_min:
+            ref_norm = (ref_angle - ref_min) / (ref_max - ref_min)
+        else:
+            ref_norm = np.ones_like(ref_angle) * 0.5
         
         for rec_idx, rec_loc in enumerate(receiver_locs):
             # Calculate ray geometry
@@ -3715,6 +3733,7 @@ def convert_avaz_results_to_sws(avaz_results, source_loc=None, n_receivers=50):
             })
     
     return pd.DataFrame(sws_data)
+
 
 
 def generate_synthetic_sws_data(n_events=20, n_receivers=20):
