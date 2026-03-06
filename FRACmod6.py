@@ -3923,13 +3923,15 @@ class ShearWaveSplittingAnalyzer:
         return delta_vs
 
 
-def convert_fracture_results_to_sws(fracture_results_df, n_receivers=20):
+def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS', fracture_strike=90, n_receivers=20):
     """
     Convert fracture model results to synthetic SWS measurements
     Based on thesis Chapter 4 model parameters
     
     Args:
         fracture_results_df: DataFrame from Tab 2 with HUDSON_EPS, etc.
+        epsilon_col: Column name to use for epsilon values
+        fracture_strike: Fracture strike azimuth in degrees
         n_receivers: Number of synthetic receivers to generate
         
     Returns:
@@ -3964,24 +3966,21 @@ def convert_fracture_results_to_sws(fracture_results_df, n_receivers=20):
     sws_data = []
     
     # Use average fracture properties from the well log if available
-    if 'HUDSON_EPS' in fracture_results_df.columns:
-        avg_epsilon = fracture_results_df['HUDSON_EPS'].mean()
+    if epsilon_col in fracture_results_df.columns:
+        epsilon_values = fracture_results_df[epsilon_col].values
+        avg_epsilon = np.mean(epsilon_values)
     else:
-        avg_epsilon = 0.08  # Default value
-    
-    # Fracture strike from Tab 2 settings (use stored value or default to 90)
-    if 'fracture_azimuth1' in st.session_state:
-        fracture_strike = st.session_state.fracture_azimuth1
-    else:
-        fracture_strike = 90  # degrees from thesis
+        st.warning(f"Column {epsilon_col} not found. Using default epsilon=0.08")
+        epsilon_values = [0.08] * len(fracture_results_df)
+        avg_epsilon = 0.08
     
     # Generate measurements for multiple "events" (depth samples)
     n_events = min(10, len(fracture_results_df))
     
     for event_idx in range(n_events):
         # Use epsilon from different depths to vary anisotropy
-        if 'HUDSON_EPS' in fracture_results_df.columns and event_idx < len(fracture_results_df):
-            epsilon = fracture_results_df.iloc[event_idx]['HUDSON_EPS']
+        if event_idx < len(epsilon_values):
+            epsilon = epsilon_values[event_idx]
         else:
             epsilon = avg_epsilon
         
@@ -4465,7 +4464,7 @@ def run_sws_analysis_app():
                         df = pd.read_csv(uploaded_file)
                         st.session_state.sws_data = df
                         st.session_state.generate_clicked = True
-                        st.success(f"Loaded {len(df)} SWS measurements")
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Error loading file: {e}")
         
@@ -4475,17 +4474,33 @@ def run_sws_analysis_app():
                     df = generate_synthetic_sws_data(n_events=20, n_receivers=20)
                     st.session_state.sws_data = df
                     st.session_state.generate_clicked = True
-                    st.success(f"Generated {len(df)} SWS measurements")
+                    st.rerun()
         
         elif data_source == "Use Fracture Model Results":
             if st.session_state.fracture_results is not None:
                 st.success("Fracture model results available!")
+                st.info(f"Data has {len(st.session_state.fracture_results)} rows with columns: {list(st.session_state.fracture_results.columns)}")
+                
+                # Let user select which epsilon to use
+                epsilon_col = st.selectbox(
+                    "Select epsilon column for anisotropy strength",
+                    options=['HUDSON_EPS', 'LS_EPS', 'ORTHO_EPS1', 'MONO_EPSX'],
+                    index=0
+                )
+                
+                # Let user set fracture strike
+                fracture_strike = st.slider("Fracture Strike Azimuth (°)", 0, 180, 90, 5)
+                
                 if st.button("🚀 Generate SWS from Fracture Results", type="primary"):
                     with st.spinner("Generating SWS measurements..."):
-                        sws_df = convert_fracture_results_to_sws(st.session_state.fracture_results)
+                        sws_df = convert_fracture_results_to_sws(
+                            st.session_state.fracture_results, 
+                            epsilon_col=epsilon_col,
+                            fracture_strike=fracture_strike
+                        )
                         st.session_state.sws_data = sws_df
                         st.session_state.generate_clicked = True
-                        st.success(f"Generated {len(sws_df)} SWS measurements!")
+                        st.rerun()
             else:
                 st.warning("No fracture model results found. Please run Tab 2 first.")
                 st.info("Go to Tab 2 and run analysis to generate fracture properties.")
@@ -4493,7 +4508,7 @@ def run_sws_analysis_app():
         st.markdown("---")
         
         # Analysis parameters (only show if data is loaded)
-        if st.session_state.sws_data is not None:
+        if st.session_state.sws_data is not None and st.session_state.generate_clicked:
             st.subheader("📊 Analysis Parameters")
             
             q_threshold = st.slider(
@@ -4532,6 +4547,7 @@ def run_sws_analysis_app():
         
         if missing_cols:
             st.error(f"Missing required columns: {missing_cols}")
+            st.error("Please check your data source. If using Fracture Model Results, ensure the conversion function created the required columns.")
             st.stop()
         
         # Check if Q column exists, if not, create default Q values
