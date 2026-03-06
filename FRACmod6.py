@@ -3923,7 +3923,7 @@ class ShearWaveSplittingAnalyzer:
         return delta_vs
 
 
-def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS', fracture_strike=90, n_receivers=20):
+def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS', fracture_strike=90, q_scale=1.0, n_receivers=20):
     """
     Convert fracture model results to synthetic SWS measurements
     Based on thesis Chapter 4 model parameters
@@ -3932,6 +3932,7 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
         fracture_results_df: DataFrame from Tab 2 with HUDSON_EPS, etc.
         epsilon_col: Column name to use for epsilon values
         fracture_strike: Fracture strike azimuth in degrees
+        q_scale: Scale factor for quality values
         n_receivers: Number of synthetic receivers to generate
         
     Returns:
@@ -4020,7 +4021,7 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
             phi_noise = np.random.randn() * 3
             phi = (fracture_strike + phi_noise) % 180
             
-            # Quality based on splitting factor
+            # Quality based on splitting factor (scaled by q_scale)
             if splitting_factor > 0.3:
                 Q = 0.85 + 0.1 * np.random.randn()
             elif splitting_factor > 0.1:
@@ -4028,6 +4029,8 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
             else:
                 Q = -0.8 + 0.2 * np.random.randn()
             
+            # Apply scaling factor
+            Q = Q * q_scale
             Q = np.clip(Q, -1, 1)
             
             sws_data.append({
@@ -4037,20 +4040,7 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
                 'source_y': source_loc[1],
                 'source_z': source_loc[2],
                 'receiver_x': rec_loc[0],
-                'receiver_y': rec_loc[1],
-                'receiver_z': rec_loc[2],
-                'azimuth': azimuth,
-                'inclination': inclination,
-                'ray_length': ray_length,
-                'phi': phi,
-                'dt': dt,
-                'Q': Q,
-                'fracture_strike_true': fracture_strike,
-                'epsilon': epsilon,
-                'delta_vs': delta_vs
-            })
-    
-    return pd.DataFrame(sws_data)
+                'receiver_y': rec_loc
 
 def generate_synthetic_sws_data(n_events=20, n_receivers=20):
     """
@@ -4150,13 +4140,19 @@ def generate_synthetic_sws_data(n_events=20, n_receivers=20):
     
     return pd.DataFrame(data)
 
-def plot_sws_results_plotly(df, analyzer):
+def plot_sws_results_plotly(df, analyzer, show_all_in_polar=True, q_threshold=0.5):
     """
     Plot SWS analysis results using Plotly
+    
+    Args:
+        df: DataFrame with SWS measurements
+        analyzer: ShearWaveSplittingAnalyzer instance
+        show_all_in_polar: If True, shows all data in polar plot (color-coded by Q)
+        q_threshold: Quality threshold for "good" data
     """
     # Filter good quality data
     df['quality_class'], _ = zip(*df['Q'].apply(lambda x: analyzer.classify_quality(x)))
-    df_good = df[df['Q'] >= 0.75].copy()  # Make a copy to avoid warnings
+    df_good = df[df['Q'] >= q_threshold].copy()  # Use the threshold from UI
     
     # Calculate delta_vs for all data first
     vs_background = 3200  # From thesis
@@ -4177,7 +4173,7 @@ def plot_sws_results_plotly(df, analyzer):
         subplot_titles=('Ray Coverage - Azimuth vs Inclination', 
                        'SWS Quality Distribution',
                        'δVs vs Ray Length',
-                       'Fast Polarization Directions (Good Q)',
+                       'Fast Polarization Directions',
                        'Delay Times vs Azimuth',
                        'Fracture Strike Inversion Result'),
         specs=[[{'type': 'scatter'}, {'type': 'histogram'}, {'type': 'scatter'}],
@@ -4226,7 +4222,7 @@ def plot_sws_results_plotly(df, analyzer):
                 x=df_good['Q'],
                 nbinsx=20,
                 marker_color='green',
-                name=f'Good Q (≥0.75)'
+                name=f'Good Q (≥{q_threshold})'
             ),
             row=1, col=2
         )
@@ -4257,45 +4253,64 @@ def plot_sws_results_plotly(df, analyzer):
     fig.update_yaxes(title_text="δVs (%)", row=1, col=3)
     
     # Plot 4: Polar plot of fast directions
-    if len(df_good) > 0:
-        # Create a single trace for all good points
+    if show_all_in_polar:
+        # Show all data, color-coded by Q
+        plot_df = df
+        marker_color = plot_df['Q']
+        marker_colorscale = 'RdBu'
+        marker_cmin = -1
+        marker_cmax = 1
+        marker_colorbar_title = "Q"
+    else:
+        # Show only good data
+        plot_df = df_good if len(df_good) > 0 else df
+        marker_color = plot_df['dt'] * 1000
+        marker_colorscale = 'Viridis'
+        marker_cmin = plot_df['dt'].min() * 1000 if len(plot_df) > 0 else 0
+        marker_cmax = plot_df['dt'].max() * 1000 if len(plot_df) > 0 else 3
+        marker_colorbar_title = "δt (ms)"
+    
+    if len(plot_df) > 0:
         fig.add_trace(
             go.Scatterpolar(
-                r=df_good['delta_vs'].values,
-                theta=df_good['phi'].values,
+                r=plot_df['delta_vs'].values,
+                theta=plot_df['phi'].values,
                 mode='markers',
                 marker=dict(
-                    size=10 * (df_good['delta_vs'] / df_good['delta_vs'].max() + 2) if df_good['delta_vs'].max() > 0 else 10,
-                    color=df_good['dt'] * 1000,
-                    colorscale='Viridis',
+                    size=10,
+                    color=marker_color,
+                    colorscale=marker_colorscale,
+                    cmin=marker_cmin,
+                    cmax=marker_cmax,
                     showscale=True,
-                    colorbar=dict(title="δt (ms)", x=0.52, y=0.32, len=0.2)
+                    colorbar=dict(title=marker_colorbar_title, x=0.52, y=0.32, len=0.2)
                 ),
-                name='Good Measurements',
-                text=[f"ϕ: {p:.1f}°<br>δVs: {dvs:.2f}%<br>δt: {dt*1000:.2f}ms" 
-                      for p, dvs, dt in zip(df_good['phi'], df_good['delta_vs'], df_good['dt'])],
+                name='Measurements',
+                text=[f"ϕ: {p:.1f}°<br>δVs: {dvs:.2f}%<br>δt: {dt*1000:.2f}ms<br>Q: {q:.2f}" 
+                      for p, dvs, dt, q in zip(plot_df['phi'], plot_df['delta_vs'], plot_df['dt'], plot_df['Q'])],
                 hoverinfo='text'
             ),
             row=2, col=1
         )
     else:
-        # Add empty trace with message if no good data
+        # Add empty trace with message if no data
         fig.add_trace(
             go.Scatterpolar(
                 r=[0],
                 theta=[0],
                 mode='markers',
                 marker=dict(size=5, color='gray'),
-                name='No Good Data (Q < 0.75)',
+                name='No Data',
                 hoverinfo='none'
             ),
             row=2, col=1
         )
     
     # Update polar subplot layout
+    max_delta_vs = df['delta_vs'].max() if df['delta_vs'].max() > 0 else 10
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, title="δVs (%)", range=[0, df['delta_vs'].max() * 1.1 if df['delta_vs'].max() > 0 else 10]),
+            radialaxis=dict(visible=True, title="δVs (%)", range=[0, max_delta_vs * 1.1]),
             angularaxis=dict(direction="clockwise", tickmode='array', tickvals=list(range(0, 360, 45)))
         )
     )
@@ -4336,7 +4351,7 @@ def plot_sws_results_plotly(df, analyzer):
                     size=10,
                     color=df_good['Q'],
                     colorscale='Viridis',
-                    cmin=0.75,
+                    cmin=q_threshold,
                     cmax=1,
                     showscale=True,
                     colorbar=dict(title="Q", x=1.02, y=0.32, len=0.2)
@@ -4395,17 +4410,40 @@ def plot_sws_results_plotly(df, analyzer):
             row=2, col=3
         )
     else:
-        fig.add_trace(
-            go.Scatter(
-                x=[0],
-                y=[0],
-                mode='markers',
-                marker=dict(size=5, color='gray'),
-                name='No Good Data',
-                hoverinfo='none'
-            ),
-            row=2, col=3
-        )
+        # Show all data in inversion plot if no good data
+        if len(df) > 0:
+            fig.add_trace(
+                go.Scatter(
+                    x=df['phi'],
+                    y=[0.08] * len(df),
+                    mode='markers',
+                    marker=dict(
+                        size=8,
+                        color=df['Q'],
+                        colorscale='RdBu',
+                        cmin=-1,
+                        cmax=1,
+                        showscale=True,
+                        colorbar=dict(title="Q", x=1.02, y=0.32, len=0.2)
+                    ),
+                    name='All Data',
+                    text=[f"ϕ: {p:.1f}°<br>Q: {q:.2f}" for p, q in zip(df['phi'], df['Q'])],
+                    hoverinfo='text'
+                ),
+                row=2, col=3
+            )
+        else:
+            fig.add_trace(
+                go.Scatter(
+                    x=[0],
+                    y=[0],
+                    mode='markers',
+                    marker=dict(size=5, color='gray'),
+                    name='No Data',
+                    hoverinfo='none'
+                ),
+                row=2, col=3
+            )
     
     fig.update_xaxes(title_text="Fast Polarization (deg)", row=2, col=3)
     fig.update_yaxes(title_text="Fracture Density", row=2, col=3, range=[0, 0.15])
@@ -4419,7 +4457,6 @@ def plot_sws_results_plotly(df, analyzer):
     )
     
     return fig
-
 def run_sws_analysis_app():
     """Main function for Shear-Wave Splitting Analysis App (App 4)"""
     st.markdown('<h1 class="main-header">🔬 Shear-Wave Splitting Analysis</h1>', unsafe_allow_html=True)
@@ -4484,21 +4521,33 @@ def run_sws_analysis_app():
                 st.info(f"Data has {len(st.session_state.fracture_results)} rows with columns: {list(st.session_state.fracture_results.columns)}")
                 
                 # Let user select which epsilon to use
-                epsilon_col = st.selectbox(
-                    "Select epsilon column for anisotropy strength",
-                    options=['HUDSON_EPS', 'LS_EPS', 'ORTHO_EPS1', 'MONO_EPSX'],
-                    index=0
-                )
+                epsilon_options = ['HUDSON_EPS', 'LS_EPS', 'ORTHO_EPS1', 'MONO_EPSX']
+                available_eps = [col for col in epsilon_options if col in st.session_state.fracture_results.columns]
+                
+                if not available_eps:
+                    st.warning("No epsilon columns found. Using default value.")
+                    epsilon_col = st.selectbox("Epsilon column", options=['Default'], index=0)
+                else:
+                    epsilon_col = st.selectbox(
+                        "Select epsilon column for anisotropy strength",
+                        options=available_eps,
+                        index=0
+                    )
                 
                 # Let user set fracture strike
                 fracture_strike = st.slider("Fracture Strike Azimuth (°)", 0, 180, 90, 5)
+                
+                # Let user adjust Q value scaling
+                q_scale = st.slider("Quality Factor Scale", 0.1, 2.0, 1.0, 0.1, 
+                                    help="Adjust to get more good quality measurements")
                 
                 if st.button("🚀 Generate SWS from Fracture Results", type="primary"):
                     with st.spinner("Generating SWS measurements..."):
                         sws_df = convert_fracture_results_to_sws(
                             st.session_state.fracture_results, 
-                            epsilon_col=epsilon_col,
-                            fracture_strike=fracture_strike
+                            epsilon_col=epsilon_col if available_eps else None,
+                            fracture_strike=fracture_strike,
+                            q_scale=q_scale
                         )
                         st.session_state.sws_data = sws_df
                         st.session_state.generate_clicked = True
@@ -4513,14 +4562,24 @@ def run_sws_analysis_app():
         if st.session_state.sws_data is not None and st.session_state.generate_clicked:
             st.subheader("📊 Analysis Parameters")
             
+            # Show Q value statistics
+            df_current = st.session_state.sws_data
+            st.write(f"Q range: [{df_current['Q'].min():.2f}, {df_current['Q'].max():.2f}]")
+            st.write(f"Q mean: {df_current['Q'].mean():.2f}")
+            st.write(f"Good Q count (≥0.75): {len(df_current[df_current['Q'] >= 0.75])}")
+            
             q_threshold = st.slider(
                 "Quality Threshold (Q ≥ )", 
                 min_value=0.0, 
                 max_value=1.0, 
-                value=0.75, 
+                value=0.5,  # Lower default threshold
                 step=0.05,
                 help="Measurements with Q ≥ threshold are considered 'Good'"
             )
+            
+            # Option to show all data in polar plot
+            show_all_in_polar = st.checkbox("Show all data in polar plot", value=True,
+                                           help="If checked, shows all data in polar plot (color-coded by Q). If unchecked, only shows good Q data.")
             
             st.markdown("**Quality Categories**")
             st.markdown("""
@@ -4531,8 +4590,9 @@ def run_sws_analysis_app():
             - <span class="quality-null">Good Null: Q < -0.75</span>
             """, unsafe_allow_html=True)
             
-            # Store threshold in session state
+            # Store parameters in session state
             st.session_state.q_threshold = q_threshold
+            st.session_state.show_all_in_polar = show_all_in_polar
     
     # Main content - only show if data is loaded
     if st.session_state.sws_data is not None and st.session_state.generate_clicked:
@@ -4600,8 +4660,9 @@ def run_sws_analysis_app():
                     ray_lengths.append(rl)
                 df['ray_length'] = ray_lengths
         
-        # Get threshold from session state
-        q_threshold = st.session_state.get('q_threshold', 0.75)
+        # Get parameters from session state
+        q_threshold = st.session_state.get('q_threshold', 0.5)
+        show_all_in_polar = st.session_state.get('show_all_in_polar', True)
         
         # Apply quality threshold
         df['quality_class'], _ = zip(*df['Q'].apply(lambda x: analyzer.classify_quality(x)))
@@ -4654,7 +4715,8 @@ def run_sws_analysis_app():
         # Main SWS plots
         st.subheader("🔬 Shear-Wave Splitting Analysis Results")
         
-        fig = plot_sws_results_plotly(df, analyzer)
+        # Pass the show_all_in_polar parameter to the plotting function
+        fig = plot_sws_results_plotly(df, analyzer, show_all_in_polar, q_threshold)
         st.plotly_chart(fig, use_container_width=True)
         
         # Detailed results table
@@ -4722,7 +4784,7 @@ def run_sws_analysis_app():
                 st.info("No null measurements found in dataset")
     
     else:
-        # Initial state - show instructions
+        # Initial state - show instructions (same as before)
         st.markdown("""
         ### 👈 Welcome to the Shear-Wave Splitting Analysis App!
         
@@ -4767,6 +4829,7 @@ def run_sws_analysis_app():
             - `dt`: Delay time (seconds)
             - `Q`: Quality factor (optional, will be estimated if not provided)
             """)
+
 # ==============================================
 # Main App with Tabs
 # ==============================================
