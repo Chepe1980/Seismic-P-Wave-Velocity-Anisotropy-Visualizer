@@ -4182,7 +4182,7 @@ def plot_sws_results_plotly(df, analyzer):
                        'Delay Times vs Azimuth',
                        'Fracture Strike Inversion Result'),
         specs=[[{'type': 'scatter'}, {'type': 'histogram'}, {'type': 'scatter'}],
-               [{'type': 'polar'}, {'type': 'scatter'}, {'type': 'scatter'}]]
+               [{'type': 'scatterpolar'}, {'type': 'scatter'}, {'type': 'scatter'}]]
     )
     
     # Plot 1: Ray coverage
@@ -4259,7 +4259,6 @@ def plot_sws_results_plotly(df, analyzer):
     
     # Plot 4: Polar plot of fast directions
     if len(df_good) > 0:
-        # Create a single trace for all good points
         fig.add_trace(
             go.Scatterpolar(
                 r=df_good['delta_vs'].values,
@@ -4280,7 +4279,6 @@ def plot_sws_results_plotly(df, analyzer):
             row=2, col=1
         )
     else:
-        # Add empty trace if no good data
         fig.add_trace(
             go.Scatterpolar(
                 r=[0],
@@ -4292,6 +4290,14 @@ def plot_sws_results_plotly(df, analyzer):
             ),
             row=2, col=1
         )
+    
+    # Update polar subplot layout
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, title="δVs (%)"),
+            angularaxis=dict(direction="clockwise")
+        )
+    )
     
     # Plot 5: Delay time vs azimuth
     fig.add_trace(
@@ -4342,25 +4348,49 @@ def plot_sws_results_plotly(df, analyzer):
             row=2, col=3
         )
         
-        # Add vertical line for true strike if available
+        # Add vertical line for true strike using add_shape instead of add_vline
         if 'fracture_strike_true' in df_good.columns:
             true_strike = np.mean(df_good['fracture_strike_true'])
-            fig.add_vline(
-                x=true_strike, 
-                line_dash="dash", 
-                line_color="red",
-                annotation_text="True Strike",
-                annotation_position="top",
+            fig.add_shape(
+                type="line",
+                x0=true_strike,
+                x1=true_strike,
+                y0=0,
+                y1=0.12,
+                yref="paper",
+                line=dict(color="red", width=2, dash="dash"),
+                row=2, col=3
+            )
+            
+            # Add annotation for true strike
+            fig.add_annotation(
+                x=true_strike,
+                y=0.13,
+                text="True Strike",
+                showarrow=False,
+                font=dict(color="red", size=10),
                 row=2, col=3
             )
         
         # Add vertical line for average inverted strike
-        fig.add_vline(
-            x=avg_strike, 
-            line_dash="dash", 
-            line_color="blue",
-            annotation_text="Avg Inverted",
-            annotation_position="bottom",
+        fig.add_shape(
+            type="line",
+            x0=avg_strike,
+            x1=avg_strike,
+            y0=0,
+            y1=0.12,
+            yref="paper",
+            line=dict(color="blue", width=2, dash="dash"),
+            row=2, col=3
+        )
+        
+        # Add annotation for average inverted strike
+        fig.add_annotation(
+            x=avg_strike,
+            y=0.11,
+            text="Avg Inverted",
+            showarrow=False,
+            font=dict(color="blue", size=10),
             row=2, col=3
         )
     else:
@@ -4377,15 +4407,7 @@ def plot_sws_results_plotly(df, analyzer):
         )
     
     fig.update_xaxes(title_text="Fast Polarization (deg)", row=2, col=3)
-    fig.update_yaxes(title_text="Fracture Density", row=2, col=3)
-    
-    # Update polar subplot layout separately
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, title="δVs (%)"),
-            angularaxis=dict(direction="clockwise", tickmode='array', tickvals=list(range(0, 360, 45)))
-        )
-    )
+    fig.update_yaxes(title_text="Fracture Density", row=2, col=3, range=[0, 0.15])
     
     # Update overall layout
     fig.update_layout(
