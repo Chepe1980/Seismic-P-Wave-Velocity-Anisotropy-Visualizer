@@ -3202,6 +3202,9 @@ def run_vti_modeling_app():
                     
                     # Reset file pointer
                     uploaded_file.seek(0)
+                else:
+                    st.error("Failed to load data from CSV file")
+                    df_filtered = None
             except Exception as e:
                 st.error(f"Error reading CSV file: {str(e)}")
                 df_filtered = None
@@ -3557,6 +3560,8 @@ def run_vti_modeling_app():
         # Show sample data preview if file is uploaded
         if data_source == "Upload CSV File" and uploaded_file is not None:
             try:
+                # Reset file pointer
+                uploaded_file.seek(0)
                 df_preview = pd.read_csv(uploaded_file)
                 st.markdown("### 📄 Uploaded Data Preview")
                 st.dataframe(df_preview.head(10), use_container_width=True)
@@ -3569,9 +3574,8 @@ def run_vti_modeling_app():
                 
                 # Reset file pointer
                 uploaded_file.seek(0)
-            except:
-                pass
-
+            except Exception as e:
+                st.error(f"Error previewing file: {str(e)}")
 
 # ==============================================
 # APP 4: Shear-Wave Splitting Analysis (SWS)
