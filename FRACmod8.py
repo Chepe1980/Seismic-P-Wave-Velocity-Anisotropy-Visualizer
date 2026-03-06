@@ -2867,7 +2867,7 @@ def create_vti_model_from_well_data(depth, vp, vs, rho,
         delta_N_air, delta_T_air, delta_N_I_air, delta_T_I_air = get_weakness_from_pressure(pressure_mpa, 'air')
         delta_N_oil, delta_T_oil, delta_N_I_oil, delta_T_I_oil = get_weakness_from_pressure(pressure_mpa, 'oil')
     else:
-        # Use provided values (will be set from UI)
+        # Use provided values
         pass
     
     # Create model parameters dictionary
