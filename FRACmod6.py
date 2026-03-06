@@ -3963,9 +3963,11 @@ def convert_fracture_results_to_sws(fracture_results_df, n_receivers=20):
     # Generate SWS measurements for each depth
     sws_data = []
     
-    # Use average fracture properties from the well log
-    avg_epsilon = fracture_results_df['HUDSON_EPS'].mean()
-    avg_gamma = fracture_results_df['HUDSON_GAM'].mean()
+    # Use average fracture properties from the well log if available
+    if 'HUDSON_EPS' in fracture_results_df.columns:
+        avg_epsilon = fracture_results_df['HUDSON_EPS'].mean()
+    else:
+        avg_epsilon = 0.08  # Default value
     
     # Fracture strike from Tab 2 settings (use stored value or default to 90)
     if 'fracture_azimuth1' in st.session_state:
@@ -3978,7 +3980,7 @@ def convert_fracture_results_to_sws(fracture_results_df, n_receivers=20):
     
     for event_idx in range(n_events):
         # Use epsilon from different depths to vary anisotropy
-        if event_idx < len(fracture_results_df):
+        if 'HUDSON_EPS' in fracture_results_df.columns and event_idx < len(fracture_results_df):
             epsilon = fracture_results_df.iloc[event_idx]['HUDSON_EPS']
         else:
             epsilon = avg_epsilon
@@ -4050,7 +4052,6 @@ def convert_fracture_results_to_sws(fracture_results_df, n_receivers=20):
             })
     
     return pd.DataFrame(sws_data)
-
 
 def generate_synthetic_sws_data(n_events=20, n_receivers=20):
     """
@@ -4157,7 +4158,21 @@ def plot_sws_results_plotly(df, analyzer):
     """
     # Filter good quality data
     df['quality_class'], _ = zip(*df['Q'].apply(lambda x: analyzer.classify_quality(x)))
-    df_good = df[df['Q'] >= 0.75]
+    df_good = df[df['Q'] >= 0.75].copy()  # Make a copy to avoid warnings
+    
+    # Calculate delta_vs for all data first
+    vs_background = 3200  # From thesis
+    df['delta_vs'] = df.apply(
+        lambda row: analyzer.calculate_delta_vs(row['dt'], row['ray_length'], vs_background), 
+        axis=1
+    )
+    
+    # Also calculate for good data
+    if len(df_good) > 0:
+        df_good['delta_vs'] = df_good.apply(
+            lambda row: analyzer.calculate_delta_vs(row['dt'], row['ray_length'], vs_background), 
+            axis=1
+        )
     
     fig = make_subplots(
         rows=2, cols=3,
@@ -4174,8 +4189,8 @@ def plot_sws_results_plotly(df, analyzer):
     # Plot 1: Ray coverage
     fig.add_trace(
         go.Scatter(
-            x=df['azimuth'],
-            y=df['inclination'],
+            x=df['azimuth'] if 'azimuth' in df.columns else df.index,
+            y=df['inclination'] if 'inclination' in df.columns else [0]*len(df),
             mode='markers',
             marker=dict(
                 size=8,
@@ -4207,26 +4222,21 @@ def plot_sws_results_plotly(df, analyzer):
         row=1, col=2
     )
     
-    fig.add_trace(
-        go.Histogram(
-            x=df_good['Q'],
-            nbinsx=20,
-            marker_color='green',
-            name=f'Good Q (≥0.75)'
-        ),
-        row=1, col=2
-    )
+    if len(df_good) > 0:
+        fig.add_trace(
+            go.Histogram(
+                x=df_good['Q'],
+                nbinsx=20,
+                marker_color='green',
+                name=f'Good Q (≥0.75)'
+            ),
+            row=1, col=2
+        )
     
     fig.update_xaxes(title_text="Quality Factor Q", row=1, col=2)
     fig.update_yaxes(title_text="Count", row=1, col=2)
     
     # Plot 3: δVs vs Ray Length
-    vs_background = 3200  # From thesis
-    df['delta_vs'] = df.apply(
-        lambda row: analyzer.calculate_delta_vs(row['dt'], row['ray_length'], vs_background), 
-        axis=1
-    )
-    
     fig.add_trace(
         go.Scatter(
             x=df['ray_length'],
@@ -4250,28 +4260,44 @@ def plot_sws_results_plotly(df, analyzer):
     
     # Plot 4: Polar plot of fast directions
     if len(df_good) > 0:
-        for _, row in df_good.iterrows():
-            fig.add_trace(
-                go.Scatterpolar(
-                    r=[row['delta_vs']],
-                    theta=[row['phi']],
-                    mode='markers',
-                    marker=dict(
-                        size=10 * row['delta_vs'] + 5,
-                        color=row['dt'] * 1000,
-                        colorscale='Viridis',
-                        showscale=False
-                    ),
-                    name='',
-                    showlegend=False
+        # Create a single trace for all good points instead of individual traces
+        fig.add_trace(
+            go.Scatterpolar(
+                r=df_good['delta_vs'].values,
+                theta=df_good['phi'].values,
+                mode='markers',
+                marker=dict(
+                    size=10 * df_good['delta_vs'] + 5,
+                    color=df_good['dt'] * 1000,
+                    colorscale='Viridis',
+                    showscale=True,
+                    colorbar=dict(title="δt (ms)", x=0.52, y=0.32, len=0.2)
                 ),
-                row=2, col=1
-            )
+                name='Good Measurements',
+                text=[f"ϕ: {p:.1f}°<br>δVs: {dvs:.2f}%<br>δt: {dt*1000:.2f}ms" 
+                      for p, dvs, dt in zip(df_good['phi'], df_good['delta_vs'], df_good['dt'])],
+                hoverinfo='text'
+            ),
+            row=2, col=1
+        )
+    else:
+        # Add empty trace if no good data
+        fig.add_trace(
+            go.Scatterpolar(
+                r=[0],
+                theta=[0],
+                mode='markers',
+                marker=dict(size=5, color='gray'),
+                name='No Good Data',
+                hoverinfo='none'
+            ),
+            row=2, col=1
+        )
     
     fig.update_layout(
         polar=dict(
             radialaxis=dict(visible=True, title="δVs (%)"),
-            angularaxis=dict(direction="clockwise")
+            angularaxis=dict(direction="clockwise", tickmode='array', tickvals=list(range(0, 360, 45)))
         ),
         row=2, col=1
     )
@@ -4279,7 +4305,7 @@ def plot_sws_results_plotly(df, analyzer):
     # Plot 5: Delay time vs azimuth
     fig.add_trace(
         go.Scatter(
-            x=df['azimuth'],
+            x=df['azimuth'] if 'azimuth' in df.columns else df.index,
             y=df['dt'] * 1000,
             mode='markers',
             marker=dict(
@@ -4313,16 +4339,19 @@ def plot_sws_results_plotly(df, analyzer):
                     color=df_good['Q'],
                     colorscale='Viridis',
                     cmin=0.75,
-                    cmax=1
+                    cmax=1,
+                    showscale=True,
+                    colorbar=dict(title="Q", x=1.02, y=0.32, len=0.2)
                 ),
                 name='Inverted',
                 text=[f"True: {t:.1f}°<br>Inv: {p:.1f}°" 
-                      for t, p in zip(df_good['fracture_strike_true'], df_good['phi'])]
+                      for t, p in zip(df_good.get('fracture_strike_true', [avg_strike]*len(df_good)), df_good['phi'])],
+                hoverinfo='text'
             ),
             row=2, col=3
         )
         
-        # Add vertical line for true strike
+        # Add vertical line for true strike if available
         if 'fracture_strike_true' in df_good.columns:
             true_strike = np.mean(df_good['fracture_strike_true'])
             fig.add_vline(
@@ -4330,6 +4359,7 @@ def plot_sws_results_plotly(df, analyzer):
                 line_dash="dash", 
                 line_color="red",
                 annotation_text="True Strike",
+                annotation_position="top",
                 row=2, col=3
             )
         
@@ -4339,6 +4369,19 @@ def plot_sws_results_plotly(df, analyzer):
             line_dash="dash", 
             line_color="blue",
             annotation_text="Avg Inverted",
+            annotation_position="bottom",
+            row=2, col=3
+        )
+    else:
+        fig.add_trace(
+            go.Scatter(
+                x=[0],
+                y=[0],
+                mode='markers',
+                marker=dict(size=5, color='gray'),
+                name='No Good Data',
+                hoverinfo='none'
+            ),
             row=2, col=3
         )
     
