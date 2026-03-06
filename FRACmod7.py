@@ -3487,6 +3487,9 @@ def run_vti_modeling_app():
 # ==============================================
 # APP 4: Shear-Wave Splitting Analysis (SWS)
 # ==============================================
+# ==============================================
+# APP 4: Shear-Wave Splitting Analysis (SWS) - Updated
+# ==============================================
 
 class ShearWaveSplittingAnalyzer:
     """
@@ -3570,23 +3573,22 @@ class ShearWaveSplittingAnalyzer:
         return max(delta_vs, 0)
 
 
-def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS', fracture_strike=90, q_scale=1.0, n_receivers=20):
+def convert_avaz_results_to_sws(avaz_results, source_loc=None, n_receivers=50):
     """
-    Convert fracture model results to synthetic SWS measurements
-    Based on thesis Chapter 4 model parameters
+    Convert AVAZ modeling results to synthetic SWS measurements
+    Uses the azimuthal reflectivity patterns from Tab 1
     
     Args:
-        fracture_results_df: DataFrame from Tab 2 with HUDSON_EPS, etc.
-        epsilon_col: Column name to use for epsilon values
-        fracture_strike: Fracture strike azimuth in degrees
-        q_scale: Scale factor for quality values
+        avaz_results: Results dictionary from run_modeling() in Tab 1
+        source_loc: Source location (x, y, z) - uses thesis default if None
         n_receivers: Number of synthetic receivers to generate
         
     Returns:
         DataFrame with SWS measurements for Tab 4
     """
-    # Thesis model parameters
-    source_loc = np.array([100, 150, 140])  # From thesis Chapter 4
+    if source_loc is None:
+        source_loc = np.array([100, 150, 140])  # From thesis Chapter 4
+    
     vs_background = 3200  # m/s from thesis
     
     # Create synthetic receiver locations (from thesis)
@@ -3607,35 +3609,38 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
             z = 100 + i * 40
             receiver_locs.append([x, 150, z])
     
-    # Take only first n_receivers
     receiver_locs = np.array(receiver_locs[:min(n_receivers, len(receiver_locs))])
     
-    # Generate SWS measurements for each depth
     sws_data = []
     
-    # Use average fracture properties from the well log if available
-    if fracture_results_df is not None and len(fracture_results_df) > 0:
-        if epsilon_col in fracture_results_df.columns:
-            epsilon_values = fracture_results_df[epsilon_col].values
-            avg_epsilon = np.mean(epsilon_values)
-        else:
-            print(f"Column {epsilon_col} not found. Using default epsilon=0.08")
-            epsilon_values = [0.08] * len(fracture_results_df)
-            avg_epsilon = 0.08
-    else:
-        print("No fracture results data. Using default epsilon=0.08")
-        epsilon_values = [0.08] * 10
-        avg_epsilon = 0.08
+    # Extract azimuths and reflectivity from AVAZ results
+    azimuths = avaz_results['azimuths']
     
-    # Generate measurements for multiple "events" (depth samples)
-    n_events = min(10, len(epsilon_values))
+    # Use the reflectivity patterns to determine fracture strike
+    # The fracture strike should be where reflectivity is maximum
+    reflectivity_orig = avaz_results['reflectivity_orig']
+    reflectivity_sub = avaz_results['reflectivity_sub']
     
-    for event_idx in range(n_events):
-        # Use epsilon from different depths to vary anisotropy
-        epsilon = epsilon_values[event_idx] if event_idx < len(epsilon_values) else avg_epsilon
+    # Average over incidence angles to get a robust estimate
+    avg_reflectivity = np.mean(reflectivity_orig, axis=0)
+    
+    # Find azimuth of maximum reflectivity (this indicates fracture strike)
+    max_ref_idx = np.argmax(avg_reflectivity)
+    fracture_strike = azimuths[max_ref_idx]
+    
+    # Calculate anisotropy strength from reflectivity variation
+    reflectivity_range = np.max(avg_reflectivity) - np.min(avg_reflectivity)
+    anisotropy_strength = reflectivity_range * 10  # Scale factor to get reasonable δVs
+    
+    # Generate measurements for multiple "events" (using different incidence angles)
+    n_angles = len(avaz_results['incidence_angles'])
+    
+    for event_idx in range(min(10, n_angles)):
+        # Use reflectivity for this incidence angle
+        ref_angle = reflectivity_orig[event_idx, :]
         
-        # δVs from epsilon (thesis: δVs ≈ ε*100 for small ε)
-        delta_vs_base = epsilon * 100
+        # Normalize to get relative anisotropy
+        ref_norm = (ref_angle - np.min(ref_angle)) / (np.max(ref_angle) - np.min(ref_angle) + 1e-10)
         
         for rec_idx, rec_loc in enumerate(receiver_locs):
             # Calculate ray geometry
@@ -3647,7 +3652,13 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
             azimuth = np.degrees(np.arctan2(dx, dy)) % 360
             inclination = np.degrees(np.arccos(dz / ray_length)) if ray_length > 0 else 0
             
-            # Calculate splitting factor based on propagation direction
+            # Find closest azimuth in AVAZ data
+            az_idx = np.argmin(np.abs(azimuths - azimuth))
+            
+            # Get normalized reflectivity for this azimuth
+            ref_value = ref_norm[az_idx]
+            
+            # Calculate splitting factor based on azimuth relative to fracture strike
             delta_phi = abs(azimuth - fracture_strike) % 180
             if delta_phi > 90:
                 delta_phi = 180 - delta_phi
@@ -3655,8 +3666,10 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
             # Stronger splitting when perpendicular to fractures
             splitting_factor = np.sin(np.radians(delta_phi))**2
             
+            # Combine with reflectivity-based anisotropy
+            delta_vs = anisotropy_strength * splitting_factor * (0.5 + 0.5 * ref_value)
+            
             # Calculate delay time
-            delta_vs = delta_vs_base * splitting_factor
             vs_fast = vs_background
             vs_slow = vs_background * (1 - delta_vs/100)
             dt = ray_length * (1/vs_slow - 1/vs_fast)
@@ -3670,16 +3683,14 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
             phi_noise = np.random.randn() * 3
             phi = (fracture_strike + phi_noise) % 180
             
-            # Quality based on splitting factor (scaled by q_scale)
-            if splitting_factor > 0.3:
+            # Quality based on splitting factor and reflectivity
+            if splitting_factor > 0.3 and ref_value > 0.5:
                 Q = 0.85 + 0.1 * np.random.randn()
             elif splitting_factor > 0.1:
                 Q = 0.5 + 0.2 * np.random.randn()
             else:
                 Q = -0.8 + 0.2 * np.random.randn()
             
-            # Apply scaling factor
-            Q = Q * q_scale
             Q = np.clip(Q, -1, 1)
             
             sws_data.append({
@@ -3698,8 +3709,9 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
                 'dt': dt,
                 'Q': Q,
                 'fracture_strike_true': fracture_strike,
-                'epsilon': epsilon,
-                'delta_vs': delta_vs
+                'anisotropy_strength': anisotropy_strength,
+                'delta_vs': delta_vs,
+                'reflectivity': ref_value
             })
     
     return pd.DataFrame(sws_data)
@@ -3920,7 +3932,7 @@ def plot_sws_results_plotly(df, analyzer, show_all_in_polar=True, q_threshold=0.
     fig.update_xaxes(title_text="Ray Length (m)", row=1, col=3)
     fig.update_yaxes(title_text="δVs (%)", row=1, col=3)
     
-    # Plot 4: Polar plot of fast directions
+    # Plot 4: Polar plot of fast directions - FIXED VERSION
     if show_all_in_polar:
         # Show all data, color-coded by Q
         plot_df = df
@@ -3929,6 +3941,7 @@ def plot_sws_results_plotly(df, analyzer, show_all_in_polar=True, q_threshold=0.
         marker_cmin = -1
         marker_cmax = 1
         marker_colorbar_title = "Q"
+        marker_size = 10
     else:
         # Show only good data
         plot_df = df_good if len(df_good) > 0 else df
@@ -3937,29 +3950,48 @@ def plot_sws_results_plotly(df, analyzer, show_all_in_polar=True, q_threshold=0.
         marker_cmin = plot_df['dt'].min() * 1000 if len(plot_df) > 0 else 0
         marker_cmax = plot_df['dt'].max() * 1000 if len(plot_df) > 0 else 3
         marker_colorbar_title = "δt (ms)"
+        marker_size = 12
     
     if len(plot_df) > 0:
-        fig.add_trace(
-            go.Scatterpolar(
-                r=plot_df['delta_vs'].values,
-                theta=plot_df['phi'].values,
-                mode='markers',
-                marker=dict(
-                    size=10,
-                    color=marker_color,
-                    colorscale=marker_colorscale,
-                    cmin=marker_cmin,
-                    cmax=marker_cmax,
-                    showscale=True,
-                    colorbar=dict(title=marker_colorbar_title, x=0.52, y=0.32, len=0.2)
+        # Ensure we have valid data for polar plot
+        valid_mask = (~np.isnan(plot_df['delta_vs'])) & (~np.isnan(plot_df['phi']))
+        plot_df_valid = plot_df[valid_mask]
+        
+        if len(plot_df_valid) > 0:
+            fig.add_trace(
+                go.Scatterpolar(
+                    r=plot_df_valid['delta_vs'].values,
+                    theta=plot_df_valid['phi'].values,
+                    mode='markers',
+                    marker=dict(
+                        size=marker_size,
+                        color=marker_color[valid_mask] if isinstance(marker_color, pd.Series) else marker_color,
+                        colorscale=marker_colorscale,
+                        cmin=marker_cmin,
+                        cmax=marker_cmax,
+                        showscale=True,
+                        colorbar=dict(title=marker_colorbar_title, x=0.52, y=0.32, len=0.2)
+                    ),
+                    name='Measurements',
+                    text=[f"ϕ: {p:.1f}°<br>δVs: {dvs:.2f}%<br>δt: {dt*1000:.2f}ms<br>Q: {q:.2f}" 
+                          for p, dvs, dt, q in zip(plot_df_valid['phi'], plot_df_valid['delta_vs'], 
+                                                    plot_df_valid['dt'], plot_df_valid['Q'])],
+                    hoverinfo='text'
                 ),
-                name='Measurements',
-                text=[f"ϕ: {p:.1f}°<br>δVs: {dvs:.2f}%<br>δt: {dt*1000:.2f}ms<br>Q: {q:.2f}" 
-                      for p, dvs, dt, q in zip(plot_df['phi'], plot_df['delta_vs'], plot_df['dt'], plot_df['Q'])],
-                hoverinfo='text'
-            ),
-            row=2, col=1
-        )
+                row=2, col=1
+            )
+        else:
+            fig.add_trace(
+                go.Scatterpolar(
+                    r=[0],
+                    theta=[0],
+                    mode='markers',
+                    marker=dict(size=5, color='gray'),
+                    name='No Valid Data',
+                    hoverinfo='none'
+                ),
+                row=2, col=1
+            )
     else:
         # Add empty trace with message if no data
         fig.add_trace(
@@ -4139,6 +4171,8 @@ def run_sws_analysis_app():
     - **Cross-Correlation & Eigenvalue Methods**: Two complementary techniques
     - **Quality Factor Q**: Automated quality classification (Wuestefeld et al., 2010)
     - **Fracture Inversion**: Estimate fracture strike and density from SWS measurements
+    
+    **New Feature:** Now uses azimuthal reflectivity data from AVAZ modeling (Tab 1) to generate realistic SWS measurements!
     </div>
     """, unsafe_allow_html=True)
     
@@ -4149,6 +4183,8 @@ def run_sws_analysis_app():
         st.session_state.sws_data = None
     if 'generate_clicked' not in st.session_state:
         st.session_state.generate_clicked = False
+    if 'avaz_results' not in st.session_state:
+        st.session_state.avaz_results = None
     
     # Sidebar
     with st.sidebar:
@@ -4157,7 +4193,7 @@ def run_sws_analysis_app():
         # Data source
         data_source = st.radio(
             "Data Source",
-            ["Generate Synthetic Data", "Upload SWS Data", "Use Fracture Model Results"],
+            ["Use AVAZ Results from Tab 1", "Generate Synthetic Data", "Upload SWS Data"],
             key="data_source"
         )
         
@@ -4185,50 +4221,33 @@ def run_sws_analysis_app():
                     st.session_state.generate_clicked = True
                     st.rerun()
         
-        elif data_source == "Use Fracture Model Results":
-            if st.session_state.fracture_results is not None:
-                st.success("✅ Fracture model results available!")
-                st.info(f"Data has {len(st.session_state.fracture_results)} rows")
+        elif data_source == "Use AVAZ Results from Tab 1":
+            # Check if AVAZ results exist in session state
+            if 'avaz_results' in st.session_state and st.session_state.avaz_results is not None:
+                st.success("✅ AVAZ results available from Tab 1!")
                 
-                # Show available columns
-                cols = list(st.session_state.fracture_results.columns)
-                st.write("Available columns:", cols[:5], "..." if len(cols) > 5 else "")
+                avaz_results = st.session_state.avaz_results
                 
-                # Let user select which epsilon to use
-                epsilon_options = ['HUDSON_EPS', 'LS_EPS', 'ORTHO_EPS1', 'MONO_EPSX']
-                available_eps = [col for col in epsilon_options if col in st.session_state.fracture_results.columns]
+                # Show AVAZ data info
+                st.info(f"AVAZ data has {len(avaz_results['azimuths'])} azimuths and {len(avaz_results['incidence_angles'])} incidence angles")
                 
-                if not available_eps:
-                    st.warning("No epsilon columns found. Using default value.")
-                    epsilon_col = "Default"
-                else:
-                    epsilon_col = st.selectbox(
-                        "Select epsilon column for anisotropy strength",
-                        options=available_eps,
-                        index=0
-                    )
+                # Let user adjust parameters
+                fracture_strike_estimate = st.slider("Fracture Strike Estimate (°)", 0, 180, 90, 5)
+                q_scale = st.slider("Quality Factor Scale", 0.1, 2.0, 1.2, 0.1)
                 
-                # Let user set fracture strike
-                fracture_strike = st.slider("Fracture Strike Azimuth (°)", 0, 180, 90, 5)
-                
-                # Let user adjust Q value scaling
-                q_scale = st.slider("Quality Factor Scale", 0.1, 2.0, 1.2, 0.1, 
-                                    help="Adjust to get more good quality measurements")
-                
-                if st.button("🚀 Generate SWS from Fracture Results", type="primary", use_container_width=True):
-                    with st.spinner("Generating SWS measurements..."):
-                        sws_df = convert_fracture_results_to_sws(
-                            st.session_state.fracture_results, 
-                            epsilon_col=epsilon_col if available_eps else 'HUDSON_EPS',
-                            fracture_strike=fracture_strike,
-                            q_scale=q_scale
+                if st.button("🚀 Generate SWS from AVAZ Data", type="primary", use_container_width=True):
+                    with st.spinner("Generating SWS measurements from AVAZ results..."):
+                        sws_df = convert_avaz_results_to_sws(
+                            avaz_results,
+                            source_loc=np.array([100, 150, 140]),
+                            n_receivers=50
                         )
                         st.session_state.sws_data = sws_df
                         st.session_state.generate_clicked = True
                         st.rerun()
             else:
-                st.warning("⚠️ No fracture model results found. Please run Tab 2 first.")
-                st.info("Go to Tab 2 and run analysis to generate fracture properties.")
+                st.warning("⚠️ No AVAZ results found. Please run Tab 1 first to generate AVAZ data.")
+                st.info("Go to Tab 1, run modeling with your parameters, then return here.")
         
         st.markdown("---")
         
@@ -4283,7 +4302,7 @@ def run_sws_analysis_app():
         
         if missing_cols:
             st.error(f"❌ Missing required columns: {missing_cols}")
-            st.error("Please check your data source. If using Fracture Model Results, ensure the conversion function created the required columns.")
+            st.error("Please check your data source.")
             st.stop()
         
         # Ensure required columns exist or calculate them
@@ -4453,10 +4472,15 @@ def run_sws_analysis_app():
         - 🏷️ **Quality Control**: Automated Q-factor classification
         - 📈 **Visualization**: Ray coverage, polar plots, and fracture inversion
         
+        **NEW: Integrated with AVAZ Modeling**
+        - Now uses azimuthal reflectivity patterns from Tab 1 to generate realistic SWS measurements
+        - Fracture strike is automatically estimated from AVAZ reflectivity maxima
+        - Anisotropy strength derived from reflectivity variations
+        
         **Data Sources:**
-        1. **Generate Synthetic Data**: Test the app with thesis-based synthetic data
-        2. **Upload SWS Data**: Use your own SWS measurements (CSV format)
-        3. **Use Fracture Model Results**: Convert Tab 2 results to SWS measurements
+        1. **Use AVAZ Results from Tab 1**: Generate SWS from your AVAZ modeling results (recommended)
+        2. **Generate Synthetic Data**: Test the app with thesis-based synthetic data
+        3. **Upload SWS Data**: Use your own SWS measurements (CSV format)
         
         **Quality Categories:**
         - **Good (Q ≥ 0.75)**: Reliable splitting measurements - use for fracture inversion
@@ -4466,9 +4490,9 @@ def run_sws_analysis_app():
         - **Good Null (Q < -0.75)**: Confident null - indicates no splitting
         
         **To get started:**
-        1. Choose a data source in the sidebar
-        2. If using fracture model results, run Tab 2 first
-        3. Click the generate/load button in the sidebar
+        1. Go to Tab 1 and run AVAZ modeling with your parameters
+        2. Return to this tab and select "Use AVAZ Results from Tab 1"
+        3. Click "Generate SWS from AVAZ Data" to create realistic SWS measurements
         """)
         
         # Show example data format
