@@ -4040,7 +4040,7 @@ def convert_fracture_results_to_sws(fracture_results_df, epsilon_col='HUDSON_EPS
                 'source_y': source_loc[1],
                 'source_z': source_loc[2],
                 'receiver_x': rec_loc[0],
-                'receiver_y': rec_loc
+                'receiver_y': rec_loc})
 
 def generate_synthetic_sws_data(n_events=20, n_receivers=20):
     """
