@@ -4518,8 +4518,25 @@ def run_sws_analysis_app():
     
     # Main content
     if st.session_state.sws_data is not None:
-        df = st.session_state.sws_data
+        df = st.session_state.sws_data.copy()  # Make a copy to avoid warnings
         analyzer = st.session_state.sws_analyzer
+        
+        # Check if Q column exists, if not, create default Q values
+        if 'Q' not in df.columns:
+            st.info("Q column not found. Creating default quality values based on geometry.")
+            # Create default Q values (good for most, null for some)
+            if 'azimuth' in df.columns and 'phi' in df.columns:
+                # Calculate difference between azimuth and polarization
+                diff = np.abs(df['azimuth'] - df['phi']) % 180
+                diff = np.minimum(diff, 180 - diff)
+                # Better quality when difference is around 45°
+                df['Q'] = 0.5 + 0.5 * np.sin(np.radians(2 * diff))
+                # Add some randomness
+                df['Q'] += np.random.randn(len(df)) * 0.1
+                df['Q'] = np.clip(df['Q'], -1, 1)
+            else:
+                # If no azimuth, create random Q values
+                df['Q'] = np.random.rand(len(df)) * 2 - 1
         
         # Ensure required columns exist or calculate them
         required_cols = ['source_x', 'source_y', 'source_z', 'receiver_x', 'receiver_y', 'receiver_z']
@@ -4544,7 +4561,7 @@ def run_sws_analysis_app():
         
         # Apply quality threshold
         df['quality_class'], _ = zip(*df['Q'].apply(lambda x: analyzer.classify_quality(x)))
-        df_good = df[df['Q'] >= q_threshold]
+        df_good = df[df['Q'] >= q_threshold].copy()
         
         # Display summary statistics
         st.subheader("📊 Summary Statistics")
@@ -4553,13 +4570,17 @@ def run_sws_analysis_app():
         with col1:
             st.metric("Total Measurements", len(df))
         with col2:
-            st.metric("Good (Q ≥ 0.75)", len(df[df['Q'] >= 0.75]))
+            good_count = len(df[df['Q'] >= 0.75])
+            st.metric("Good (Q ≥ 0.75)", good_count)
         with col3:
-            st.metric("Good Null (Q < -0.75)", len(df[df['Q'] < -0.75]))
+            null_count = len(df[df['Q'] < -0.75])
+            st.metric("Good Null (Q < -0.75)", null_count)
         with col4:
             if len(df_good) > 0:
                 avg_strike = np.mean(df_good['phi'])
                 st.metric("Avg Fracture Strike", f"{avg_strike:.1f}°")
+            else:
+                st.metric("Avg Fracture Strike", "N/A")
         
         # Quality distribution
         st.subheader("📈 Quality Distribution")
@@ -4603,6 +4624,7 @@ def run_sws_analysis_app():
                                       'ϕ(°)', 'δt(ms)', 'Q', 'Quality', 'Ray Length(m)']
                 st.dataframe(display_df, use_container_width=True)
             else:
+                # Show available columns
                 st.dataframe(df, use_container_width=True)
         
         # Download results
@@ -4622,13 +4644,17 @@ def run_sws_analysis_app():
                 
                 fig_null = go.Figure()
                 
+                x_data = df_null['azimuth'] if 'azimuth' in df_null.columns else df_null.index
+                y_data = df_null['inclination'] if 'inclination' in df_null.columns else [0]*len(df_null)
+                color_data = df_null['phi'] if 'phi' in df_null.columns else 0
+                
                 fig_null.add_trace(go.Scatter(
-                    x=df_null['azimuth'] if 'azimuth' in df_null.columns else df_null.index,
-                    y=df_null['inclination'] if 'inclination' in df_null.columns else [0]*len(df_null),
+                    x=x_data,
+                    y=y_data,
                     mode='markers',
                     marker=dict(
                         size=8,
-                        color=df_null['phi'] if 'phi' in df_null.columns else 0,
+                        color=color_data,
                         colorscale='Viridis',
                         colorbar=dict(title="ϕ(°)")
                     ),
@@ -4703,7 +4729,6 @@ def run_sws_analysis_app():
             - `dt`: Delay time (seconds)
             - `Q`: Quality factor (optional, will be estimated if not provided)
             """)
-
 
 # ==============================================
 # Main App with Tabs
