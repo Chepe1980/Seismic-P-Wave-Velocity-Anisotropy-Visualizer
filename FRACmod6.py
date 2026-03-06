@@ -4151,7 +4151,6 @@ def generate_synthetic_sws_data(n_events=20, n_receivers=20):
     
     return pd.DataFrame(data)
 
-
 def plot_sws_results_plotly(df, analyzer):
     """
     Plot SWS analysis results using Plotly
@@ -4183,7 +4182,7 @@ def plot_sws_results_plotly(df, analyzer):
                        'Delay Times vs Azimuth',
                        'Fracture Strike Inversion Result'),
         specs=[[{'type': 'scatter'}, {'type': 'histogram'}, {'type': 'scatter'}],
-               [{'type': 'scatterpolar'}, {'type': 'scatter'}, {'type': 'scatter'}]]
+               [{'type': 'polar'}, {'type': 'scatter'}, {'type': 'scatter'}]]
     )
     
     # Plot 1: Ray coverage
@@ -4260,7 +4259,7 @@ def plot_sws_results_plotly(df, analyzer):
     
     # Plot 4: Polar plot of fast directions
     if len(df_good) > 0:
-        # Create a single trace for all good points instead of individual traces
+        # Create a single trace for all good points
         fig.add_trace(
             go.Scatterpolar(
                 r=df_good['delta_vs'].values,
@@ -4293,14 +4292,6 @@ def plot_sws_results_plotly(df, analyzer):
             ),
             row=2, col=1
         )
-    
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(visible=True, title="δVs (%)"),
-            angularaxis=dict(direction="clockwise", tickmode='array', tickvals=list(range(0, 360, 45)))
-        ),
-        row=2, col=1
-    )
     
     # Plot 5: Delay time vs azimuth
     fig.add_trace(
@@ -4388,6 +4379,15 @@ def plot_sws_results_plotly(df, analyzer):
     fig.update_xaxes(title_text="Fast Polarization (deg)", row=2, col=3)
     fig.update_yaxes(title_text="Fracture Density", row=2, col=3)
     
+    # Update polar subplot layout separately
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, title="δVs (%)"),
+            angularaxis=dict(direction="clockwise", tickmode='array', tickvals=list(range(0, 360, 45)))
+        )
+    )
+    
+    # Update overall layout
     fig.update_layout(
         height=900,
         title_text="Shear-Wave Splitting Analysis Results",
@@ -4396,7 +4396,6 @@ def plot_sws_results_plotly(df, analyzer):
     )
     
     return fig
-
 
 def run_sws_analysis_app():
     """Main function for Shear-Wave Splitting Analysis App (App 4)"""
