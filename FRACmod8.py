@@ -1985,9 +1985,6 @@ def load_well_data(uploaded_file) -> pd.DataFrame:
         # Convert column names to uppercase for consistency and strip whitespace
         df.columns = df.columns.str.upper().str.strip()
         
-        # Display available columns for debugging (optional)
-        # st.write("Available columns in CSV:", list(df.columns))
-        
         # Check for required columns (case-insensitive)
         required_cols = ['DEPTH', 'VP', 'VS', 'RHO']
         missing_cols = []
@@ -2032,7 +2029,6 @@ def load_well_data(uploaded_file) -> pd.DataFrame:
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
         return None
-
 
 def generate_example_data():
     """Generate synthetic well log data for demonstration"""
