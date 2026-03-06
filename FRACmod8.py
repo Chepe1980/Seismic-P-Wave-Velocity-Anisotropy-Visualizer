@@ -3178,12 +3178,13 @@ def run_vti_modeling_app():
         # Data input method
         data_source = st.radio(
             "Data Input Method",
-            ["Upload CSV File", "Use Synthetic Data"]
+            ["Upload CSV File", "Use Synthetic Data"],
+            key="vti_data_source"
         )
         
         uploaded_file = None
         if data_source == "Upload CSV File":
-            uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+            uploaded_file = st.file_uploader("Choose a CSV file", type="csv", key="vti_file_uploader")
             if uploaded_file is not None:
                 st.success(f"File uploaded: {uploaded_file.name}")
         
@@ -3207,13 +3208,15 @@ def run_vti_modeling_app():
                                                    value=depth_min_full,
                                                    min_value=depth_min_full,
                                                    max_value=depth_max_full,
-                                                   step=10.0)
+                                                   step=10.0,
+                                                   key="vti_depth_min")
                     with col2:
                         depth_max = st.number_input("Max Depth", 
                                                    value=depth_max_full,
                                                    min_value=depth_min_full,
                                                    max_value=depth_max_full,
-                                                   step=10.0)
+                                                   step=10.0,
+                                                   key="vti_depth_max")
                     
                     if depth_min < depth_max:
                         df_filtered = select_depth_range_vti(df_full, depth_min, depth_max)
@@ -3239,7 +3242,8 @@ def run_vti_modeling_app():
         
         pressure_mode = st.radio(
             "Pressure Input Mode",
-            ["Single Pressure", "Pressure Scan"]
+            ["Single Pressure", "Pressure Scan"],
+            key="pressure_mode"
         )
         
         if pressure_mode == "Single Pressure":
@@ -3247,16 +3251,17 @@ def run_vti_modeling_app():
                                      min_value=0.1, max_value=50.0, 
                                      value=st.session_state.current_pressure, 
                                      step=0.1,
-                                     format="%.1f MPa")
+                                     format="%.1f MPa",
+                                     key="single_pressure")
             st.session_state.current_pressure = pressure_mpa
             pressures = [pressure_mpa]
         else:
             col1, col2 = st.columns(2)
             with col1:
-                p_min = st.number_input("Min Pressure (MPa)", value=0.1, min_value=0.1, max_value=50.0, step=0.5)
+                p_min = st.number_input("Min Pressure (MPa)", value=0.1, min_value=0.1, max_value=50.0, step=0.5, key="p_min")
             with col2:
-                p_max = st.number_input("Max Pressure (MPa)", value=10.0, min_value=0.1, max_value=50.0, step=0.5)
-            n_pressures = st.slider("Number of pressure steps", min_value=2, max_value=10, value=5)
+                p_max = st.number_input("Max Pressure (MPa)", value=10.0, min_value=0.1, max_value=50.0, step=0.5, key="p_max")
+            n_pressures = st.slider("Number of pressure steps", min_value=2, max_value=10, value=5, key="n_pressures")
             
             if p_min < p_max:
                 pressures = np.linspace(p_min, p_max, n_pressures)
@@ -3271,7 +3276,7 @@ def run_vti_modeling_app():
         # Weakness parameters (manual override option)
         st.subheader("🔧 Weakness Parameters")
         
-        use_pressure_dependence = st.checkbox("Use pressure-dependent model", value=True)
+        use_pressure_dependence = st.checkbox("Use pressure-dependent model", value=True, key="use_pressure_dep")
         
         if not use_pressure_dependence:
             st.info("Manual parameter entry enabled")
@@ -3279,20 +3284,20 @@ def run_vti_modeling_app():
             st.markdown("**Air-filled Fractures**")
             col1, col2 = st.columns(2)
             with col1:
-                delta_N_air = st.number_input("ΔN (air)", value=0.55, min_value=0.0, max_value=1.0, step=0.05, format="%.3f")
-                delta_T_air = st.number_input("ΔT (air)", value=0.55, min_value=0.0, max_value=1.0, step=0.05, format="%.3f")
+                delta_N_air = st.number_input("ΔN (air)", value=0.55, min_value=0.0, max_value=1.0, step=0.05, format="%.3f", key="delta_N_air")
+                delta_T_air = st.number_input("ΔT (air)", value=0.55, min_value=0.0, max_value=1.0, step=0.05, format="%.3f", key="delta_T_air")
             with col2:
-                delta_N_I_air = st.number_input("ΔNᴵ (air)", value=0.05, min_value=0.0, max_value=0.5, step=0.01, format="%.3f")
-                delta_T_I_air = st.number_input("ΔTᴵ (air)", value=0.05, min_value=0.0, max_value=0.5, step=0.01, format="%.3f")
+                delta_N_I_air = st.number_input("ΔNᴵ (air)", value=0.05, min_value=0.0, max_value=0.5, step=0.01, format="%.3f", key="delta_N_I_air")
+                delta_T_I_air = st.number_input("ΔTᴵ (air)", value=0.05, min_value=0.0, max_value=0.5, step=0.01, format="%.3f", key="delta_T_I_air")
             
             st.markdown("**Oil-saturated Fractures**")
             col3, col4 = st.columns(2)
             with col3:
-                delta_N_oil = st.number_input("ΔN (oil)", value=0.20, min_value=0.0, max_value=1.0, step=0.05, format="%.3f")
-                delta_T_oil = st.number_input("ΔT (oil)", value=0.20, min_value=0.0, max_value=1.0, step=0.05, format="%.3f")
+                delta_N_oil = st.number_input("ΔN (oil)", value=0.20, min_value=0.0, max_value=1.0, step=0.05, format="%.3f", key="delta_N_oil")
+                delta_T_oil = st.number_input("ΔT (oil)", value=0.20, min_value=0.0, max_value=1.0, step=0.05, format="%.3f", key="delta_T_oil")
             with col4:
-                delta_N_I_oil = st.number_input("ΔNᴵ (oil)", value=0.03, min_value=0.0, max_value=0.5, step=0.01, format="%.3f")
-                delta_T_I_oil = st.number_input("ΔTᴵ (oil)", value=0.03, min_value=0.0, max_value=0.5, step=0.01, format="%.3f")
+                delta_N_I_oil = st.number_input("ΔNᴵ (oil)", value=0.03, min_value=0.0, max_value=0.5, step=0.01, format="%.3f", key="delta_N_I_oil")
+                delta_T_I_oil = st.number_input("ΔTᴵ (oil)", value=0.03, min_value=0.0, max_value=0.5, step=0.01, format="%.3f", key="delta_T_I_oil")
         else:
             # Default values (will be overridden by pressure dependence)
             delta_N_air = delta_T_air = delta_N_I_air = delta_T_I_air = None
@@ -3302,20 +3307,20 @@ def run_vti_modeling_app():
         
         # Data generation parameters
         st.subheader("📊 Data Generation")
-        n_angles = st.slider("Number of angles", min_value=5, max_value=30, value=13)
-        noise_level_v = st.slider("Velocity noise level", min_value=0.0, max_value=0.05, value=0.01, step=0.005, format="%.3f")
-        noise_level_q = st.slider("Attenuation noise level", min_value=0.0, max_value=0.1, value=0.03, step=0.005, format="%.3f")
-        add_missing_sv = st.checkbox("Add missing SV data points", value=True)
+        n_angles = st.slider("Number of angles", min_value=5, max_value=30, value=13, key="n_angles")
+        noise_level_v = st.slider("Velocity noise level", min_value=0.0, max_value=0.05, value=0.01, step=0.005, format="%.3f", key="noise_v")
+        noise_level_q = st.slider("Attenuation noise level", min_value=0.0, max_value=0.1, value=0.03, step=0.005, format="%.3f", key="noise_q")
+        add_missing_sv = st.checkbox("Add missing SV data points", value=True, key="add_missing_sv")
         
         st.markdown("---")
         
         # Plot parameters
         st.subheader("🎨 Plot Settings")
-        fig_width = st.slider("Figure width", min_value=12, max_value=20, value=16)
-        fig_height = st.slider("Figure height", min_value=8, max_value=14, value=10)
+        fig_width = st.slider("Figure width", min_value=12, max_value=20, value=16, key="fig_width")
+        fig_height = st.slider("Figure height", min_value=8, max_value=14, value=10, key="fig_height")
         
         # Generate button
-        generate_btn = st.button("🚀 Generate Plots", type="primary", use_container_width=True)
+        generate_btn = st.button("🚀 Generate Plots", type="primary", use_container_width=True, key="generate_btn")
         
         st.markdown("---")
         st.markdown("### 📥 Download Options")
@@ -3405,7 +3410,8 @@ def run_vti_modeling_app():
                                     data=buf_png,
                                     file_name=f"vti_model_{pressure:.1f}MPa.png",
                                     mime="image/png",
-                                    use_container_width=True
+                                    use_container_width=True,
+                                    key=f"download_png_{idx}"
                                 )
                             
                             # PDF download
@@ -3419,7 +3425,8 @@ def run_vti_modeling_app():
                                     data=buf_pdf,
                                     file_name=f"vti_model_{pressure:.1f}MPa.pdf",
                                     mime="application/pdf",
-                                    use_container_width=True
+                                    use_container_width=True,
+                                    key=f"download_pdf_{idx}"
                                 )
                 else:
                     # Single pressure display
@@ -3440,7 +3447,8 @@ def run_vti_modeling_app():
                             data=buf_png,
                             file_name=f"vti_model_{pressure:.1f}MPa.png",
                             mime="image/png",
-                            use_container_width=True
+                            use_container_width=True,
+                            key="download_png_single"
                         )
                     
                     # PDF download
@@ -3454,7 +3462,8 @@ def run_vti_modeling_app():
                             data=buf_pdf,
                             file_name=f"vti_model_{pressure:.1f}MPa.pdf",
                             mime="application/pdf",
-                            use_container_width=True
+                            use_container_width=True,
+                            key="download_pdf_single"
                         )
                     
                     # Parameters CSV download
@@ -3482,7 +3491,8 @@ def run_vti_modeling_app():
                             data=csv,
                             file_name=f"vti_model_parameters_{pressure:.1f}MPa.csv",
                             mime="text/csv",
-                            use_container_width=True
+                            use_container_width=True,
+                            key="download_params"
                         )
                     
                     # Display model parameters in a table
@@ -3598,7 +3608,6 @@ def run_vti_modeling_app():
                 uploaded_file.seek(0)
             except Exception as e:
                 st.error(f"Error previewing file: {str(e)}")
-
 # ==============================================
 # APP 4: Shear-Wave Splitting Analysis (SWS)
 # ==============================================
