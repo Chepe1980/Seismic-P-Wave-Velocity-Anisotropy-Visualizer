@@ -4521,11 +4521,20 @@ def run_sws_analysis_app():
         df = st.session_state.sws_data.copy()  # Make a copy to avoid warnings
         analyzer = st.session_state.sws_analyzer
         
+        # Check if required columns exist
+        if 'phi' not in df.columns:
+            st.error("The data must contain a 'phi' column (fast polarization direction in degrees)")
+            st.stop()
+        
+        if 'dt' not in df.columns:
+            st.error("The data must contain a 'dt' column (delay time in seconds)")
+            st.stop()
+        
         # Check if Q column exists, if not, create default Q values
         if 'Q' not in df.columns:
             st.info("Q column not found. Creating default quality values based on geometry.")
             # Create default Q values (good for most, null for some)
-            if 'azimuth' in df.columns and 'phi' in df.columns:
+            if 'azimuth' in df.columns:
                 # Calculate difference between azimuth and polarization
                 diff = np.abs(df['azimuth'] - df['phi']) % 180
                 diff = np.minimum(diff, 180 - diff)
@@ -4542,21 +4551,31 @@ def run_sws_analysis_app():
         required_cols = ['source_x', 'source_y', 'source_z', 'receiver_x', 'receiver_y', 'receiver_z']
         if all(col in df.columns for col in required_cols):
             # Calculate azimuth and inclination if not present
-            if 'azimuth' not in df.columns or 'inclination' not in df.columns:
+            if 'azimuth' not in df.columns:
                 azimuths = []
-                inclinations = []
-                ray_lengths = []
-                
                 for _, row in df.iterrows():
                     source = [row['source_x'], row['source_y'], row['source_z']]
                     receiver = [row['receiver_x'], row['receiver_y'], row['receiver_z']]
-                    az, inc, rl = analyzer.calculate_ray_coordinates(source, receiver)
+                    az, _, _ = analyzer.calculate_ray_coordinates(source, receiver)
                     azimuths.append(az)
-                    inclinations.append(inc)
-                    ray_lengths.append(rl)
-                
                 df['azimuth'] = azimuths
+            
+            if 'inclination' not in df.columns:
+                inclinations = []
+                for _, row in df.iterrows():
+                    source = [row['source_x'], row['source_y'], row['source_z']]
+                    receiver = [row['receiver_x'], row['receiver_y'], row['receiver_z']]
+                    _, inc, _ = analyzer.calculate_ray_coordinates(source, receiver)
+                    inclinations.append(inc)
                 df['inclination'] = inclinations
+            
+            if 'ray_length' not in df.columns:
+                ray_lengths = []
+                for _, row in df.iterrows():
+                    source = [row['source_x'], row['source_y'], row['source_z']]
+                    receiver = [row['receiver_x'], row['receiver_y'], row['receiver_z']]
+                    _, _, rl = analyzer.calculate_ray_coordinates(source, receiver)
+                    ray_lengths.append(rl)
                 df['ray_length'] = ray_lengths
         
         # Apply quality threshold
@@ -4615,17 +4634,10 @@ def run_sws_analysis_app():
         
         # Detailed results table
         with st.expander("📋 View Detailed Results"):
-            display_cols = ['event_id', 'receiver_id', 'azimuth', 'inclination', 
-                           'phi', 'dt', 'Q', 'quality_class', 'ray_length']
-            if all(col in df.columns for col in display_cols):
-                display_df = df[display_cols].copy()
+            display_df = df.copy()
+            if 'dt' in display_df.columns:
                 display_df['dt'] = display_df['dt'] * 1000  # Convert to ms
-                display_df.columns = ['Event', 'Receiver', 'Azimuth(°)', 'Inclination(°)', 
-                                      'ϕ(°)', 'δt(ms)', 'Q', 'Quality', 'Ray Length(m)']
-                st.dataframe(display_df, use_container_width=True)
-            else:
-                # Show available columns
-                st.dataframe(df, use_container_width=True)
+            st.dataframe(display_df, use_container_width=True)
         
         # Download results
         csv = df.to_csv(index=False)
@@ -4729,7 +4741,6 @@ def run_sws_analysis_app():
             - `dt`: Delay time (seconds)
             - `Q`: Quality factor (optional, will be estimated if not provided)
             """)
-
 # ==============================================
 # Main App with Tabs
 # ==============================================
