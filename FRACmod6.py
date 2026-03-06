@@ -4258,13 +4258,14 @@ def plot_sws_results_plotly(df, analyzer):
     
     # Plot 4: Polar plot of fast directions
     if len(df_good) > 0:
+        # Create a single trace for all good points
         fig.add_trace(
             go.Scatterpolar(
                 r=df_good['delta_vs'].values,
                 theta=df_good['phi'].values,
                 mode='markers',
                 marker=dict(
-                    size=10 * df_good['delta_vs'] + 5,
+                    size=10 * (df_good['delta_vs'] / df_good['delta_vs'].max() + 2) if df_good['delta_vs'].max() > 0 else 10,
                     color=df_good['dt'] * 1000,
                     colorscale='Viridis',
                     showscale=True,
@@ -4278,13 +4279,14 @@ def plot_sws_results_plotly(df, analyzer):
             row=2, col=1
         )
     else:
+        # Add empty trace with message if no good data
         fig.add_trace(
             go.Scatterpolar(
                 r=[0],
                 theta=[0],
                 mode='markers',
                 marker=dict(size=5, color='gray'),
-                name='No Good Data',
+                name='No Good Data (Q < 0.75)',
                 hoverinfo='none'
             ),
             row=2, col=1
@@ -4293,8 +4295,8 @@ def plot_sws_results_plotly(df, analyzer):
     # Update polar subplot layout
     fig.update_layout(
         polar=dict(
-            radialaxis=dict(visible=True, title="δVs (%)"),
-            angularaxis=dict(direction="clockwise")
+            radialaxis=dict(visible=True, title="δVs (%)", range=[0, df['delta_vs'].max() * 1.1 if df['delta_vs'].max() > 0 else 10]),
+            angularaxis=dict(direction="clockwise", tickmode='array', tickvals=list(range(0, 360, 45)))
         )
     )
     
@@ -4347,7 +4349,7 @@ def plot_sws_results_plotly(df, analyzer):
             row=2, col=3
         )
         
-        # Add vertical line for true strike using add_shape instead of add_vline
+        # Add vertical line for true strike if available
         if 'fracture_strike_true' in df_good.columns:
             true_strike = np.mean(df_good['fracture_strike_true'])
             fig.add_shape(
