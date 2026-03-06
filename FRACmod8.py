@@ -1970,10 +1970,14 @@ def load_well_data(uploaded_file) -> pd.DataFrame:
         DataFrame with well log data
     """
     try:
+        # Reset file pointer
+        uploaded_file.seek(0)
+        
+        # Read CSV
         df = pd.read_csv(uploaded_file)
         
         # Check for required columns (case-insensitive)
-        df.columns = df.columns.str.upper()
+        df.columns = df.columns.str.upper().str.strip()
         
         required_cols = ['DEPTH', 'VP', 'VS', 'RHO']
         missing_cols = [col for col in required_cols if col not in df.columns]
@@ -1983,16 +1987,26 @@ def load_well_data(uploaded_file) -> pd.DataFrame:
             st.info("Please ensure your CSV has columns named: DEPTH, VP, VS, RHO")
             return None
         
+        # Convert to numeric
+        for col in required_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
         # Remove rows with invalid data
+        df = df.dropna(subset=required_cols)
         df = df[(df['VP'] > 0) & (df['VS'] > 0) & (df['RHO'] > 0)]
-        df = df.dropna()
         
         if len(df) == 0:
             st.error("No valid data after filtering")
             return None
         
+        # Reset file pointer for future use
+        uploaded_file.seek(0)
+        
         return df
         
+    except pd.errors.EmptyDataError:
+        st.error("The uploaded CSV file is empty.")
+        return None
     except Exception as e:
         st.error(f"Error loading file: {str(e)}")
         return None
