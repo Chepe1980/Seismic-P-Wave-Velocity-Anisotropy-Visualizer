@@ -4439,6 +4439,8 @@ def run_sws_analysis_app():
         st.session_state.sws_analyzer = ShearWaveSplittingAnalyzer(dt_sampling=0.001)
     if 'sws_data' not in st.session_state:
         st.session_state.sws_data = None
+    if 'generate_clicked' not in st.session_state:
+        st.session_state.generate_clicked = False
     
     # Sidebar
     with st.sidebar:
@@ -4447,7 +4449,8 @@ def run_sws_analysis_app():
         # Data source
         data_source = st.radio(
             "Data Source",
-            ["Generate Synthetic Data", "Upload SWS Data", "Use Fracture Model Results"]
+            ["Generate Synthetic Data", "Upload SWS Data", "Use Fracture Model Results"],
+            key="data_source"
         )
         
         if data_source == "Upload SWS Data":
@@ -4456,14 +4459,32 @@ def run_sws_analysis_app():
                 type="csv",
                 help="CSV with columns: event_id, receiver_id, source_x/y/z, receiver_x/y/z, phi, dt, Q (optional)"
             )
+            if uploaded_file is not None:
+                if st.button("🚀 Load and Analyze", type="primary"):
+                    try:
+                        df = pd.read_csv(uploaded_file)
+                        st.session_state.sws_data = df
+                        st.session_state.generate_clicked = True
+                        st.success(f"Loaded {len(df)} SWS measurements")
+                    except Exception as e:
+                        st.error(f"Error loading file: {e}")
+        
+        elif data_source == "Generate Synthetic Data":
+            if st.button("🚀 Generate Synthetic Data", type="primary"):
+                with st.spinner("Generating synthetic SWS data..."):
+                    df = generate_synthetic_sws_data(n_events=20, n_receivers=20)
+                    st.session_state.sws_data = df
+                    st.session_state.generate_clicked = True
+                    st.success(f"Generated {len(df)} SWS measurements")
         
         elif data_source == "Use Fracture Model Results":
             if st.session_state.fracture_results is not None:
                 st.success("Fracture model results available!")
-                if st.button("Generate SWS from Fracture Results"):
+                if st.button("🚀 Generate SWS from Fracture Results", type="primary"):
                     with st.spinner("Generating SWS measurements..."):
                         sws_df = convert_fracture_results_to_sws(st.session_state.fracture_results)
                         st.session_state.sws_data = sws_df
+                        st.session_state.generate_clicked = True
                         st.success(f"Generated {len(sws_df)} SWS measurements!")
             else:
                 st.warning("No fracture model results found. Please run Tab 2 first.")
@@ -4471,63 +4492,46 @@ def run_sws_analysis_app():
         
         st.markdown("---")
         
-        # Analysis parameters
-        st.subheader("📊 Analysis Parameters")
-        
-        q_threshold = st.slider(
-            "Quality Threshold (Q ≥ )", 
-            min_value=0.0, 
-            max_value=1.0, 
-            value=0.75, 
-            step=0.05,
-            help="Measurements with Q ≥ threshold are considered 'Good'"
-        )
-        
-        st.markdown("**Quality Categories**")
-        st.markdown("""
-        - <span class="quality-good">Good: Q ≥ 0.75</span>
-        - Fair: 0.25 ≤ Q < 0.75
-        - <span class="quality-poor">Poor: -0.25 ≤ Q < 0.25</span>
-        - Fair Null: -0.75 ≤ Q < -0.25
-        - <span class="quality-null">Good Null: Q < -0.75</span>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # Fracture inversion parameters
-        st.subheader("🔧 Fracture Inversion")
-        
-        fracture_sets = st.selectbox(
-            "Fracture Model",
-            ["Single Set (HTI)", "Double Orthogonal Sets"]
-        )
-        
-        if st.button("🚀 Run Analysis", type="primary"):
-            if data_source == "Generate Synthetic Data":
-                with st.spinner("Generating synthetic SWS data..."):
-                    df = generate_synthetic_sws_data(n_events=20, n_receivers=20)
-                    st.session_state.sws_data = df
-                    st.success(f"Generated {len(df)} SWS measurements")
-            elif data_source == "Upload SWS Data" and uploaded_file is not None:
-                try:
-                    df = pd.read_csv(uploaded_file)
-                    st.session_state.sws_data = df
-                    st.success(f"Loaded {len(df)} SWS measurements")
-                except Exception as e:
-                    st.error(f"Error loading file: {e}")
+        # Analysis parameters (only show if data is loaded)
+        if st.session_state.sws_data is not None:
+            st.subheader("📊 Analysis Parameters")
+            
+            q_threshold = st.slider(
+                "Quality Threshold (Q ≥ )", 
+                min_value=0.0, 
+                max_value=1.0, 
+                value=0.75, 
+                step=0.05,
+                help="Measurements with Q ≥ threshold are considered 'Good'"
+            )
+            
+            st.markdown("**Quality Categories**")
+            st.markdown("""
+            - <span class="quality-good">Good: Q ≥ 0.75</span>
+            - Fair: 0.25 ≤ Q < 0.75
+            - <span class="quality-poor">Poor: -0.25 ≤ Q < 0.25</span>
+            - Fair Null: -0.75 ≤ Q < -0.25
+            - <span class="quality-null">Good Null: Q < -0.75</span>
+            """, unsafe_allow_html=True)
+            
+            # Store threshold in session state
+            st.session_state.q_threshold = q_threshold
     
-    # Main content
-    if st.session_state.sws_data is not None:
+    # Main content - only show if data is loaded
+    if st.session_state.sws_data is not None and st.session_state.generate_clicked:
         df = st.session_state.sws_data.copy()  # Make a copy to avoid warnings
         analyzer = st.session_state.sws_analyzer
         
-        # Check if required columns exist
-        if 'phi' not in df.columns:
-            st.error("The data must contain a 'phi' column (fast polarization direction in degrees)")
-            st.stop()
+        # Display dataframe info
+        st.subheader("📋 Data Overview")
+        st.write(f"Loaded {len(df)} measurements with columns: {list(df.columns)}")
         
-        if 'dt' not in df.columns:
-            st.error("The data must contain a 'dt' column (delay time in seconds)")
+        # Check if required columns exist
+        required_cols = ['phi', 'dt']
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        
+        if missing_cols:
+            st.error(f"Missing required columns: {missing_cols}")
             st.stop()
         
         # Check if Q column exists, if not, create default Q values
@@ -4548,8 +4552,8 @@ def run_sws_analysis_app():
                 df['Q'] = np.random.rand(len(df)) * 2 - 1
         
         # Ensure required columns exist or calculate them
-        required_cols = ['source_x', 'source_y', 'source_z', 'receiver_x', 'receiver_y', 'receiver_z']
-        if all(col in df.columns for col in required_cols):
+        required_geo_cols = ['source_x', 'source_y', 'source_z', 'receiver_x', 'receiver_y', 'receiver_z']
+        if all(col in df.columns for col in required_geo_cols):
             # Calculate azimuth and inclination if not present
             if 'azimuth' not in df.columns:
                 azimuths = []
@@ -4577,6 +4581,9 @@ def run_sws_analysis_app():
                     _, _, rl = analyzer.calculate_ray_coordinates(source, receiver)
                     ray_lengths.append(rl)
                 df['ray_length'] = ray_lengths
+        
+        # Get threshold from session state
+        q_threshold = st.session_state.get('q_threshold', 0.75)
         
         # Apply quality threshold
         df['quality_class'], _ = zip(*df['Q'].apply(lambda x: analyzer.classify_quality(x)))
@@ -4637,6 +4644,7 @@ def run_sws_analysis_app():
             display_df = df.copy()
             if 'dt' in display_df.columns:
                 display_df['dt'] = display_df['dt'] * 1000  # Convert to ms
+                display_df.rename(columns={'dt': 'dt_ms'}, inplace=True)
             st.dataframe(display_df, use_container_width=True)
         
         # Download results
@@ -4723,7 +4731,7 @@ def run_sws_analysis_app():
         **To get started:**
         1. Choose a data source in the sidebar
         2. If using fracture model results, run Tab 2 first
-        3. Click "Run Analysis" to process
+        3. Click the generate/load button in the sidebar
         """)
         
         # Show example data format
